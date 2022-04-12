@@ -1,0 +1,9 @@
+_test/
+tests/clab-*
+tests/srl-*
+tests/.*clab.yaml
+builds/
+dist
+*.log
+gnmic
+*.tmp

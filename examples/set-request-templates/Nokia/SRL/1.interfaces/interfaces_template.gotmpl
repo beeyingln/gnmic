@@ -1,0 +1,52 @@
+{{ $target := index .Vars .TargetName }}
+updates:
+{{- range $interface := $target.interfaces }}
+  - path: "/interface[name={{ $interface.name }}]"
+    encoding: "json_ietf"
+    value:
+      admin-state: {{ $interface.admin_state | default "disable" }}
+      description: {{ $interface.description | default "" }}
+      {{- if $interface.mtu }}
+      mtu: {{ $interface.mtu }}
+      {{- end }}
+      {{- if $interface.vlan_tagging }}
+      vlan-tagging: {{ $interface.vlan_tagging }}
+      {{- end }}
+      {{- if $ethernet := $interface.ethernet }}
+      ethernet:
+        {{- if $ethernet.aggregate_id }}
+        aggregate-id: {{ $ethernet.aggregate_id }}
+        {{- end }}
+        {{- if $ethernet.auto_negotiate }}
+        auto-negotiate: {{ $ethernet.auto_negotiate }}
+        {{- end }}
+        {{- if $ethernet.duplex_mode }}
+        duplex-mode: {{ $ethernet.duplex_mode }}
+        {{- end }}
+        {{- if $ethernet.flow_control.receive }}
+        flow-control: 
+          receive: {{ $ethernet.flow_control.receive }}
+        {{- end }}
+      {{- end }}
+      {{- if $interface.lag }}
+      lag:
+        {{- if $interface.lag.lag_type }}
+        lag-type: {{ $interface.lag.lag_type }}
+        {{- end }}
+        {{- if $interface.lag.min_links }}
+        min-links: {{ $interface.lag.min_links }}
+        {{- end }}
+        {{- if $interface.lag.member_speed }}
+        member-speed: {{ $interface.lag.member_speed }}
+        {{- end }}
+        {{- if $interface.lag.lacp_fallback_mode }}
+        lacp-fallback-mode: {{ $interface.lag.lacp_fallback_mode }}
+        {{- end }}
+        {{- if $interface.lag.lacp_fallback_timeout }}
+        lacp-fallback-timeout: {{ $interface.lag.lacp_fallback_timeout }}
+        {{- end }}
+        {{- if $interface.lag.lag_speed }}
+        lag-speedt: {{ $interface.lag.lag_speed }}
+        {{- end }}
+      {{- end }}
+{{- end }}
