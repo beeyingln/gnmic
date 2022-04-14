@@ -17,6 +17,7 @@ import (
 	"github.com/karimra/gnmic/target"
 	"github.com/karimra/gnmic/types"
 	"github.com/karimra/gnmic/utils"
+	"github.com/openconfig/gnmi/cache"
 	"github.com/openconfig/gnmi/coalesce"
 	"github.com/openconfig/gnmi/ctree"
 	"github.com/openconfig/gnmi/match"
@@ -353,21 +354,42 @@ func (a *App) Get(ctx context.Context, req *gnmi.GetRequest) (*gnmi.GetResponse,
 			if creq.GetPrefix().GetTarget() == "" || creq.GetPrefix().GetTarget() == "*" {
 				creq.Prefix.Target = name
 			}
-			res, err := t.Get(ctx, creq)
-			if err != nil {
-				a.Logger.Printf("target %q err: %v", name, err)
-				errChan <- fmt.Errorf("target %q err: %v", name, err)
-				return
+
+			//Retrieve Notifications which are in Cache
+			var notifPathsNotInCache []*gnmi.Path = make([]*gnmi.Path, 0)
+			for _, getPath := range req.GetPath() {
+				var notification *gnmi.Notification
+				notification, err = getNotificationFromCache(a.c, name, req.GetPrefix(), getPath)
+				if err != nil {
+					a.Logger.Printf("target %q err: %v", name, err)
+				}
+
+				if err != nil && notification != nil {
+					results <- notification
+				} else {
+					notifPathsNotInCache = append(notifPathsNotInCache, getPath)
+				}
 			}
 
-			for _, n := range res.GetNotification() {
-				if n.GetPrefix() == nil {
-					n.Prefix = new(gnmi.Path)
+			// Notications which are not in Cache are retrived via gNMI Get request
+			creq.Path = notifPathsNotInCache
+			if len(creq.Path) > 0 {
+				res, err := t.Get(ctx, creq)
+				if err != nil {
+					a.Logger.Printf("target %q err: %v", name, err)
+					errChan <- fmt.Errorf("target %q err: %v", name, err)
+					return
 				}
-				if n.GetPrefix().GetTarget() == "" {
-					n.Prefix.Target = name
+
+				for _, n := range res.GetNotification() {
+					if n.GetPrefix() == nil {
+						n.Prefix = new(gnmi.Path)
+					}
+					if n.GetPrefix().GetTarget() == "" {
+						n.Prefix.Target = name
+					}
+					results <- n
 				}
-				results <- n
 			}
 		}(name, tc)
 	}
@@ -1257,4 +1279,39 @@ func subscriptionConfigToNotification(sub *types.SubscriptionConfig, e gnmi.Enco
 	case gnmi.Encoding_ASCII:
 	}
 	return nil
+}
+
+func getNotificationFromCache(cache *cache.Cache, targetName string, prefix *gnmi.Path, path *gnmi.Path) (*gnmi.Notification, error) {
+	var notification *gnmi.Notification
+	var err error
+
+	if cache.HasTarget(targetName) {
+		var isInCache bool = false
+		var nb *NotificationBuilder
+		nb, err = NewNotificationBuilder(targetName, prefix, path)
+		if err != nil {
+			return nil, err
+		}
+
+		err = cache.Query(targetName, nb.GetCompletePath(),
+			func(_ []string, l *ctree.Leaf, v interface{}) error {
+				if err != nil {
+					return err
+				}
+
+				switch notif := v.(type) {
+				case *gnmi.Notification:
+					isInCache = true
+					nb.AppendNotification(notif)
+				}
+
+				return nil
+			})
+
+		if isInCache {
+			notification = nb.BuildNotification()
+		}
+	}
+
+	return notification, err
 }
