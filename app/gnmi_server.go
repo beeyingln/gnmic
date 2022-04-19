@@ -160,6 +160,7 @@ func (a *App) sendBatch(ctx context.Context) {
 
 	// Merge together based on target
 	// Merge into a single SetRequest
+	a.Logger.Printf("batching %d requests", len(a.queueRequest))
 	for reqUuid, queueReq := range a.queueRequest {
 		if _, ok := targetMergedRequests[queueReq.targetName]; !ok {
 			// First request; so don't merge, just copy
@@ -243,6 +244,7 @@ func (a *App) sendBatch(ctx context.Context) {
 
 		if err != nil {
 			// Something went wrong. Due to lack of a SetResponse and UpdateResults, we can only try to fall back to trying a sequential approach
+			a.Logger.Printf("failed batching requests for %s", string(name))
 			for i, reqUuid := range targetUuids[name] {
 				if i == 0 {
 					// Process the first request as normal
@@ -274,6 +276,7 @@ func (a *App) sendBatch(ctx context.Context) {
 			uuidOrder = append(uuidOrder, targetResponseUuidDelete[name]...)
 			uuidOrder = append(uuidOrder, targetResponseUuidReplace[name]...)
 			uuidOrder = append(uuidOrder, targetResponseUuidUpdate[name]...)
+			a.Logger.Printf("successfully batched all requests for %s", string(name))
 			// uuidOrder now contains the Uuids in the correct order
 			// Now translate this to a mapping from uuid to index
 			uuidMap := map[string][]int{}
@@ -670,6 +673,7 @@ func (a *App) Set(ctx context.Context, req *gnmi.SetRequest) (*gnmi.SetResponse,
 			var res *gnmi.SetResponse
 			var err error
 			if a.Config.GnmiServer.WriteBatching {
+				a.Logger.Printf("registering request in the write batch due to configuration")
 				reqUuid := uuid.New().String()
 				a.queueMutex.Lock()
 				a.queueRequest[reqUuid] = &QueuedRequest{req, t, name, errChan}
@@ -701,6 +705,7 @@ func (a *App) Set(ctx context.Context, req *gnmi.SetRequest) (*gnmi.SetResponse,
 					return
 				}
 			} else {
+				a.Logger.Printf("skipping write batching due to configuration")
 				err := t.CreateGNMIClient(ctx, targetDialOpts...)
 				if err != nil {
 					a.Logger.Printf("target %q err: %v", name, err)
