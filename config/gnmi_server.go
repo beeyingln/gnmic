@@ -17,6 +17,8 @@ const (
 	defaultServiceRegistrationAddress = "localhost:8500"
 	defaultRegistrationCheckInterval  = 5 * time.Second
 	defaultMaxServiceFail             = 3
+    // Performance configuration
+    defaultBatchingInterval = 1 * time.Second
 )
 
 type gnmiServer struct {
@@ -36,6 +38,9 @@ type gnmiServer struct {
 	Debug         bool `mapstructure:"debug,omitempty" json:"debug,omitempty"`
 	// ServiceRegistration
 	ServiceRegistration *serviceRegistration `mapstructure:"service-registration,omitempty" json:"service-registration,omitempty"`
+    // Performance configuration
+    WriteBatching bool `mapstructure:"write-batching,omitempty" json:"write-batching,omitempty"`
+    BatchingInterval time.Duration `mapstructure:"batching-interval,omitempty" json:"batching-interval,omitempty"`
 }
 
 type serviceRegistration struct {
@@ -83,6 +88,8 @@ func (c *Config) GetGNMIServer() error {
 
 	c.GnmiServer.EnableMetrics = os.ExpandEnv(c.FileConfig.GetString("gnmi-server/enable-metrics")) == "true"
 	c.GnmiServer.Debug = os.ExpandEnv(c.FileConfig.GetString("gnmi-server/debug")) == "true"
+	c.GnmiServer.WriteBatching = os.ExpandEnv(c.FileConfig.GetString("gnmi-server/write-batching")) == "true"
+	c.GnmiServer.BatchingInterval = c.FileConfig.GetDuration("gnmi-server/batching-interval")
 	c.setGnmiServerDefaults()
 
 	if !c.FileConfig.IsSet("gnmi-server/service-registration") {
@@ -121,6 +128,9 @@ func (c *Config) setGnmiServerDefaults() {
 	if c.GnmiServer.MinHeartbeatInterval <= 0 {
 		c.GnmiServer.MinHeartbeatInterval = minimumHeartbeatInterval
 	}
+    if c.GnmiServer.BatchingInterval <= 0 {
+        c.GnmiServer.BatchingInterval = defaultBatchingInterval
+    }
 }
 
 func (c *Config) setGnmiServerServiceRegistrationDefaults() {
