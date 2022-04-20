@@ -558,12 +558,14 @@ func (a *App) Get(ctx context.Context, req *gnmi.GetRequest) (*gnmi.GetResponse,
 				notification, err = getNotificationFromCache(a.c, name, req.GetPrefix(), getPath)
 				if err != nil {
 					a.Logger.Printf("target %q err: %v", name, err)
-				}
 
-				if err != nil && notification != nil {
-					results <- notification
-				} else {
 					notifPathsNotInCache = append(notifPathsNotInCache, getPath)
+				} else {
+					if notification != nil {
+						results <- notification
+					} else {
+						notifPathsNotInCache = append(notifPathsNotInCache, getPath)
+					}
 				}
 			}
 
@@ -586,6 +588,8 @@ func (a *App) Get(ctx context.Context, req *gnmi.GetRequest) (*gnmi.GetResponse,
 					}
 					results <- n
 				}
+			} else {
+				incrementGnmiServerGrpcGetCacheHitTotalMetric()
 			}
 		}(name, tc)
 	}
