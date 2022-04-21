@@ -551,46 +551,53 @@ func (a *App) Get(ctx context.Context, req *gnmi.GetRequest) (*gnmi.GetResponse,
 				creq.Prefix.Target = name
 			}
 
-			//Retrieve Notifications which are in Cache
-			var notifPathsNotInCache []*gnmi.Path = make([]*gnmi.Path, 0)
-			for _, getPath := range req.GetPath() {
-				var notification *gnmi.Notification
-				notification, err = getNotificationFromCache(a.c, name, req.GetPrefix(), getPath)
-				if err != nil {
-					a.Logger.Printf("target %q err: %v", name, err)
+            allFound := false
+            if a.Config.GnmiServer.ReadCache {
+                //Retrieve Notifications which are in Cache
+                var notifPathsNotInCache []*gnmi.Path = make([]*gnmi.Path, 0)
+                for _, getPath := range req.GetPath() {
+                    var notification *gnmi.Notification
+                    notification, err = getNotificationFromCache(a.c, name, req.GetPrefix(), getPath)
+                    if err != nil {
+                        a.Logger.Printf("target %q err: %v", name, err)
 
-					notifPathsNotInCache = append(notifPathsNotInCache, getPath)
-				} else {
-					if notification != nil {
-						results <- notification
-					} else {
-						notifPathsNotInCache = append(notifPathsNotInCache, getPath)
-					}
-				}
-			}
+                        notifPathsNotInCache = append(notifPathsNotInCache, getPath)
+                    } else {
+                        if notification != nil {
+                            results <- notification
+                        } else {
+                            notifPathsNotInCache = append(notifPathsNotInCache, getPath)
+                        }
+                    }
+                }
 
-			// Notications which are not in Cache are retrived via gNMI Get request
-			creq.Path = notifPathsNotInCache
-			if len(creq.Path) > 0 {
-				res, err := t.Get(ctx, creq)
-				if err != nil {
-					a.Logger.Printf("target %q err: %v", name, err)
-					errChan <- fmt.Errorf("target %q err: %v", name, err)
-					return
-				}
+                // Notications which are not in Cache are retrived via gNMI Get request
+                creq.Path = notifPathsNotInCache
+                if len(creq.Path) == 0 {
+                    incrementGnmiServerGrpcGetCacheHitTotalMetric()
+                    allFound = true
+                }
+            }
 
-				for _, n := range res.GetNotification() {
-					if n.GetPrefix() == nil {
-						n.Prefix = new(gnmi.Path)
-					}
-					if n.GetPrefix().GetTarget() == "" {
-						n.Prefix.Target = name
-					}
-					results <- n
-				}
-			} else {
-				incrementGnmiServerGrpcGetCacheHitTotalMetric()
-			}
+            if !a.Config.GnmiServer.ReadCache || !allFound {
+                // If not found or if we don't use the cache, make the request anyhow
+                res, err := t.Get(ctx, creq)
+                if err != nil {
+                    a.Logger.Printf("target %q err: %v", name, err)
+                    errChan <- fmt.Errorf("target %q err: %v", name, err)
+                    return
+                }
+
+                for _, n := range res.GetNotification() {
+                    if n.GetPrefix() == nil {
+                        n.Prefix = new(gnmi.Path)
+                    }
+                    if n.GetPrefix().GetTarget() == "" {
+                        n.Prefix.Target = name
+                    }
+                    results <- n
+                }
+            }
 		}(name, tc)
 	}
 	wg.Wait()

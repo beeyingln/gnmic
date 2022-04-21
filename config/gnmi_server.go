@@ -41,6 +41,7 @@ type gnmiServer struct {
     // Performance configuration
     WriteBatching bool `mapstructure:"write-batching,omitempty" json:"write-batching,omitempty"`
     BatchingInterval time.Duration `mapstructure:"batching-interval,omitempty" json:"batching-interval,omitempty"`
+    ReadCache bool `mapstructure:"read-cache,omitempty" json:"read-cache,omitempty"`
 }
 
 type serviceRegistration struct {
@@ -89,6 +90,7 @@ func (c *Config) GetGNMIServer() error {
 	c.GnmiServer.EnableMetrics = os.ExpandEnv(c.FileConfig.GetString("gnmi-server/enable-metrics")) == "true"
 	c.GnmiServer.Debug = os.ExpandEnv(c.FileConfig.GetString("gnmi-server/debug")) == "true"
 	c.GnmiServer.WriteBatching = os.ExpandEnv(c.FileConfig.GetString("gnmi-server/write-batching")) == "true"
+	c.GnmiServer.ReadCache = os.ExpandEnv(c.FileConfig.GetString("gnmi-server/read-cache")) == "true"
 	c.GnmiServer.BatchingInterval = c.FileConfig.GetDuration("gnmi-server/batching-interval")
 	c.setGnmiServerDefaults()
 
