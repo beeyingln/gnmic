@@ -128,7 +128,7 @@ func (c *Config) setGnmiServerDefaults() {
 	if c.GnmiServer.MinHeartbeatInterval <= 0 {
 		c.GnmiServer.MinHeartbeatInterval = minimumHeartbeatInterval
 	}
-    if c.GnmiServer.BatchingInterval <= 0 {
+    if c.GnmiServer.BatchingInterval <= defaultBatchingInterval {
         c.GnmiServer.BatchingInterval = defaultBatchingInterval
     }
 }
