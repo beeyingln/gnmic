@@ -247,6 +247,8 @@ func (a *App) sendBatch(ctx context.Context) {
 			a.Logger.Printf("failed batching requests for %s", string(name))
 			for i, reqUuid := range targetUuids[name] {
 				if i == 0 {
+                    // Wait for a new "batching interval", as we don't want to overload the device
+		            time.Sleep(a.Config.GnmiServer.BatchingInterval)
 					// Process the first request as normal
 					req = a.queueRequest[reqUuid].req
 					creq := proto.Clone(req).(*gnmi.SetRequest)
