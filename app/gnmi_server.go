@@ -557,7 +557,7 @@ func (a *App) Get(ctx context.Context, req *gnmi.GetRequest) (*gnmi.GetResponse,
                 var notifPathsNotInCache []*gnmi.Path = make([]*gnmi.Path, 0)
                 for _, getPath := range req.GetPath() {
                     var notification *gnmi.Notification
-                    notification, err = getNotificationFromCache(a.c, name, req.GetPrefix(), getPath)
+                    notification, err = a.getNotificationFromCache(a.c, name, req.GetPrefix(), getPath)
                     if err != nil {
                         a.Logger.Printf("target %q err: %v", name, err)
 
@@ -1526,14 +1526,14 @@ func subscriptionConfigToNotification(sub *types.SubscriptionConfig, e gnmi.Enco
 	return nil
 }
 
-func getNotificationFromCache(cache *cache.Cache, targetName string, prefix *gnmi.Path, path *gnmi.Path) (*gnmi.Notification, error) {
+func (a *App) getNotificationFromCache(cache *cache.Cache, targetName string, prefix *gnmi.Path, path *gnmi.Path) (*gnmi.Notification, error) {
 	var notification *gnmi.Notification
 	var err error
 
 	if cache.HasTarget(targetName) {
 		var isInCache bool = false
 		var nb *NotificationBuilder
-		nb, err = NewNotificationBuilder(targetName, prefix, path)
+		nb, err = NewNotificationBuilder(targetName, a.Config.GlobalFlags.Encoding, prefix, path)
 		if err != nil {
 			return nil, err
 		}
@@ -1547,14 +1547,21 @@ func getNotificationFromCache(cache *cache.Cache, targetName string, prefix *gnm
 				switch notif := v.(type) {
 				case *gnmi.Notification:
 					isInCache = true
-					nb.AppendNotification(notif)
+					if err = nb.AppendNotification(proto.Clone(notif).(*gnmi.Notification)); err != nil {
+						return err
+					}
 				}
 
 				return nil
 			})
+		if err != nil {
+			return nil, err
+		}
 
 		if isInCache {
-			notification = nb.BuildNotification()
+			if notification, err = nb.BuildNotification(); err != nil {
+				return nil, err
+			}
 		}
 	}
 

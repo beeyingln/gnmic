@@ -3,6 +3,7 @@ module github.com/karimra/gnmic
 go 1.17
 
 require (
+	github.com/Jeffail/gabs v1.4.0
 	github.com/Shopify/sarama v1.31.0
 	github.com/adrg/xdg v0.4.0
 	github.com/c-bata/go-prompt v0.2.5
@@ -54,7 +55,6 @@ require (
 require (
 	cloud.google.com/go/compute v1.3.0 // indirect
 	cloud.google.com/go/iam v0.3.0 // indirect
-	github.com/Jeffail/gabs v1.4.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.2 // indirect
 	github.com/jcmturner/aescts/v2 v2.0.0 // indirect
 	github.com/jcmturner/dnsutils/v2 v2.0.0 // indirect
