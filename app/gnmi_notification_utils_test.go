@@ -15,14 +15,15 @@ func TestNotificationBuilder(t *testing.T) {
 			{Name: "state"}, {Name: "aaa"},
 		}}
 
-	var nb *NotificationBuilder
-	var err error
-	nb, err = NewNotificationBuilder(targetName, prefix, path)
+	nb, err := NewNotificationBuilder(targetName, "JSON_IETF", prefix, path)
 	if err != nil {
 		t.Errorf("Error when creating NotificationBuilder %q", err)
 	}
 
-	var expectedNotification *gnmi.Notification = nb.BuildNotification()
+	expectedNotification, err := nb.BuildNotification()
+	if err != nil {
+		t.Errorf("Error when Building Notification %q", err)
+	}
 
 	notification := gnmi.Notification{
 		Prefix: &gnmi.Path{
@@ -32,24 +33,27 @@ func TestNotificationBuilder(t *testing.T) {
 		Update: []*gnmi.Update{
 			{
 				Path: &gnmi.Path{
-					Elem: []*gnmi.PathElem{
-						{Name: "radius"},
-					},
+					Elem: []*gnmi.PathElem{},
 				},
 				Val: &gnmi.TypedValue{
-					Value: &gnmi.TypedValue_JsonVal{
-						JsonVal: []byte(`14`),
+					Value: &gnmi.TypedValue_JsonIetfVal{
+						JsonIetfVal: []byte(`{"radius":14}`),
 					},
 				},
 			},
 		},
 	}
 
-	nb.AppendNotification(&notification)
+	if err = nb.AppendNotification(&notification); err != nil {
+		t.Errorf("Error when appending Notification %q", err)
+	}
 
-	updatedNotification := nb.BuildNotification()
+	updatedNotification, err := nb.BuildNotification()
+	if err != nil {
+		t.Errorf("Error when Building Notification %q", err)
+	}
 
-	expectedNotification.Update[0].Val = &gnmi.TypedValue{Value: &gnmi.TypedValue_JsonVal{JsonVal: []byte(`{"radius":"14"}`)}}
+	expectedNotification.Update[0].Val = &gnmi.TypedValue{Value: &gnmi.TypedValue_JsonIetfVal{JsonIetfVal: []byte(`{"state":{"aaa":{"radius":14}}}`)}}
 	expectedNotification.Timestamp = updatedNotification.GetTimestamp()
 	if !reflect.DeepEqual(updatedNotification, expectedNotification) {
 		t.Errorf("got %q, expected %q", updatedNotification, expectedNotification)
