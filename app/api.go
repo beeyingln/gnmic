@@ -31,7 +31,7 @@ func (a *App) newAPIServer() (*http.Server, error) {
 		a.router.Handle("/metrics", promhttp.HandlerFor(a.reg, promhttp.HandlerOpts{}))
 		a.reg.MustRegister(collectors.NewGoCollector())
 		a.reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
-		
+
 		//Register gNMIC Server Metrics
 		registerGnmiServerMetrics(a.reg)
 	}

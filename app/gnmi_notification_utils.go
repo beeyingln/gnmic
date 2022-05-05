@@ -55,12 +55,12 @@ func (nb NotificationBuilder) AppendNotification(notification *gnmi.Notification
 
 			var value []byte
 			switch strings.ToUpper(nb.Encoding) {
-				case "JSON_IETF":
-					value = updt.Val.GetJsonIetfVal()
-				case "JSON":
-					value = updt.Val.GetJsonVal()
-				default:
-					return fmt.Errorf("Invalid encoding type %q, possible values are [ JSON, JSON_IETF ]", nb.Encoding)
+			case "JSON_IETF":
+				value = updt.Val.GetJsonIetfVal()
+			case "JSON":
+				value = updt.Val.GetJsonVal()
+			default:
+				return fmt.Errorf("Invalid encoding type %q, possible values are [ JSON, JSON_IETF ]", nb.Encoding)
 			}
 
 			jsonObj := gabs.New()
@@ -82,42 +82,42 @@ func (nb NotificationBuilder) GetCompletePath() []string {
 
 func (nb NotificationBuilder) BuildNotification() (*gnmi.Notification, error) {
 	switch strings.ToUpper(nb.Encoding) {
-		case "JSON_IETF":
-			return (&gnmi.Notification{
-				Timestamp: time.Now().UnixNano(),
-				Prefix:    nb.Prefix,
-				Update: []*gnmi.Update{
-					{
-						Path: &gnmi.Path{
-							Elem: nb.PathElem,
-						},
-						Val: &gnmi.TypedValue{
-							Value: &gnmi.TypedValue_JsonIetfVal{
-								JsonIetfVal: nb.JSONObj.EncodeJSON(),
-							},
+	case "JSON_IETF":
+		return (&gnmi.Notification{
+			Timestamp: time.Now().UnixNano(),
+			Prefix:    nb.Prefix,
+			Update: []*gnmi.Update{
+				{
+					Path: &gnmi.Path{
+						Elem: nb.PathElem,
+					},
+					Val: &gnmi.TypedValue{
+						Value: &gnmi.TypedValue_JsonIetfVal{
+							JsonIetfVal: nb.JSONObj.EncodeJSON(),
 						},
 					},
 				},
-			}), nil
-		case "JSON":
-			return (&gnmi.Notification{
-				Timestamp: time.Now().UnixNano(),
-				Prefix:    nb.Prefix,
-				Update: []*gnmi.Update{
-					{
-						Path: &gnmi.Path{
-							Elem: nb.PathElem,
-						},
-						Val: &gnmi.TypedValue{
-							Value: &gnmi.TypedValue_JsonVal{
-								JsonVal: nb.JSONObj.EncodeJSON(),
-							},
+			},
+		}), nil
+	case "JSON":
+		return (&gnmi.Notification{
+			Timestamp: time.Now().UnixNano(),
+			Prefix:    nb.Prefix,
+			Update: []*gnmi.Update{
+				{
+					Path: &gnmi.Path{
+						Elem: nb.PathElem,
+					},
+					Val: &gnmi.TypedValue{
+						Value: &gnmi.TypedValue_JsonVal{
+							JsonVal: nb.JSONObj.EncodeJSON(),
 						},
 					},
 				},
-			}), nil
-		default:
-			return nil, fmt.Errorf("Invalid encoding type %q, possible values are [ JSON, JSON_IETF ]", nb.Encoding)
+			},
+		}), nil
+	default:
+		return nil, fmt.Errorf("Invalid encoding type %q, possible values are [ JSON, JSON_IETF ]", nb.Encoding)
 	}
 }
 
@@ -127,7 +127,7 @@ func formatPathElem(pathElems []*gnmi.PathElem) []string {
 	for _, elmt := range pathElems {
 		var keys string
 		for k, v := range elmt.Key {
-			keys += "["+k+"="+v+"]"
+			keys += "[" + k + "=" + v + "]"
 		}
 		if len(keys) > 0 {
 			path = append(path, elmt.Name+keys)
