@@ -241,14 +241,16 @@ func (a *App) sendBatch(ctx context.Context) {
 		}
 
 		res, err := t.Set(ctx, creq)
+		incrementGnmiServerGrpcDeviceSetReqTotalMetric()
 
 		if err != nil {
 			// Something went wrong. Due to lack of a SetResponse and UpdateResults, we can only try to fall back to trying a sequential approach
+			addGnmiServerBatchingTransactionFailureImpactedTotalMetric(float64(len(targetUuids[name])))
 			a.Logger.Printf("failed batching requests for %s", string(name))
 			for i, reqUuid := range targetUuids[name] {
 				if i == 0 {
-                    // Wait for a new "batching interval", as we don't want to overload the device
-		            time.Sleep(a.Config.GnmiServer.BatchingInterval)
+					// Wait for a new "batching interval", as we don't want to overload the device
+					time.Sleep(a.Config.GnmiServer.BatchingInterval)
 					// Process the first request as normal
 					req = a.queueRequest[reqUuid].req
 					creq := proto.Clone(req).(*gnmi.SetRequest)
@@ -259,6 +261,7 @@ func (a *App) sendBatch(ctx context.Context) {
 						creq.Prefix.Target = name
 					}
 					res, err := t.Set(ctx, creq)
+					incrementGnmiServerGrpcDeviceSetReqTotalMetric()
 					a.queueResponse[reqUuid] = &QueuedResponse{res, err}
 					delete(a.queueRequest, reqUuid)
 				} else {
@@ -553,53 +556,53 @@ func (a *App) Get(ctx context.Context, req *gnmi.GetRequest) (*gnmi.GetResponse,
 				creq.Prefix.Target = name
 			}
 
-            allFound := false
-            if a.Config.GnmiServer.ReadCache {
-                //Retrieve Notifications which are in Cache
-                var notifPathsNotInCache []*gnmi.Path = make([]*gnmi.Path, 0)
-                for _, getPath := range req.GetPath() {
-                    var notification *gnmi.Notification
-                    notification, err = a.getNotificationFromCache(a.c, name, req.GetPrefix(), getPath)
-                    if err != nil {
-                        a.Logger.Printf("target %q err: %v", name, err)
+			allFound := false
+			if a.Config.GnmiServer.ReadCache {
+				//Retrieve Notifications which are in Cache
+				var notifPathsNotInCache []*gnmi.Path = make([]*gnmi.Path, 0)
+				for _, getPath := range req.GetPath() {
+					var notification *gnmi.Notification
+					notification, err = a.getNotificationFromCache(a.c, name, req.GetPrefix(), getPath)
+					if err != nil {
+						a.Logger.Printf("target %q err: %v", name, err)
 
-                        notifPathsNotInCache = append(notifPathsNotInCache, getPath)
-                    } else {
-                        if notification != nil {
-                            results <- notification
-                        } else {
-                            notifPathsNotInCache = append(notifPathsNotInCache, getPath)
-                        }
-                    }
-                }
+						notifPathsNotInCache = append(notifPathsNotInCache, getPath)
+					} else {
+						if notification != nil {
+							results <- notification
+						} else {
+							notifPathsNotInCache = append(notifPathsNotInCache, getPath)
+						}
+					}
+				}
 
-                // Notications which are not in Cache are retrived via gNMI Get request
-                creq.Path = notifPathsNotInCache
-                if len(creq.Path) == 0 {
-                    incrementGnmiServerGrpcGetCacheHitTotalMetric()
-                    allFound = true
-                }
-            }
+				// Notications which are not in Cache are retrived via gNMI Get request
+				creq.Path = notifPathsNotInCache
+				if len(creq.Path) == 0 {
+					incrementGnmiServerGrpcGetCacheHitTotalMetric()
+					allFound = true
+				}
+			}
 
-            if !a.Config.GnmiServer.ReadCache || !allFound {
-                // If not found or if we don't use the cache, make the request anyhow
-                res, err := t.Get(ctx, creq)
-                if err != nil {
-                    a.Logger.Printf("target %q err: %v", name, err)
-                    errChan <- fmt.Errorf("target %q err: %v", name, err)
-                    return
-                }
+			if !a.Config.GnmiServer.ReadCache || !allFound {
+				// If not found or if we don't use the cache, make the request anyhow
+				res, err := t.Get(ctx, creq)
+				if err != nil {
+					a.Logger.Printf("target %q err: %v", name, err)
+					errChan <- fmt.Errorf("target %q err: %v", name, err)
+					return
+				}
 
-                for _, n := range res.GetNotification() {
-                    if n.GetPrefix() == nil {
-                        n.Prefix = new(gnmi.Path)
-                    }
-                    if n.GetPrefix().GetTarget() == "" {
-                        n.Prefix.Target = name
-                    }
-                    results <- n
-                }
-            }
+				for _, n := range res.GetNotification() {
+					if n.GetPrefix() == nil {
+						n.Prefix = new(gnmi.Path)
+					}
+					if n.GetPrefix().GetTarget() == "" {
+						n.Prefix.Target = name
+					}
+					results <- n
+				}
+			}
 		}(name, tc)
 	}
 	wg.Wait()
@@ -733,6 +736,7 @@ func (a *App) Set(ctx context.Context, req *gnmi.SetRequest) (*gnmi.SetResponse,
 					creq.Prefix.Target = name
 				}
 				res, err = t.Set(ctx, creq)
+				incrementGnmiServerGrpcDeviceSetReqTotalMetric()
 			}
 
 			if err != nil {
