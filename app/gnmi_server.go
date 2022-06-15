@@ -230,6 +230,7 @@ func (a *App) sendBatch(ctx context.Context) {
 			// Continue on to the next one
 			continue
 		}
+		defer t.Close()
 
 		req, _ := targetMergedRequests[name]
 		creq := proto.Clone(req).(*gnmi.SetRequest)
@@ -728,6 +729,7 @@ func (a *App) Set(ctx context.Context, req *gnmi.SetRequest) (*gnmi.SetResponse,
 					errChan <- fmt.Errorf("target %q err: %v", name, err)
 					return
 				}
+				defer t.Close()
 				creq := proto.Clone(req).(*gnmi.SetRequest)
 				if creq.GetPrefix() == nil {
 					creq.Prefix = new(gnmi.Path)
