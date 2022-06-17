@@ -242,11 +242,11 @@ func (a *App) sendBatch(ctx context.Context) {
 		}
 
 		res, err := t.Set(ctx, creq)
-		incrementGnmiServerGrpcDeviceSetReqTotalMetric()
+		incrementGnmiOutgoingSetRequestsTotalMetric()
 
 		if err != nil {
 			// Something went wrong. Due to lack of a SetResponse and UpdateResults, we can only try to fall back to trying a sequential approach
-			addGnmiServerBatchingTransactionFailureImpactedTotalMetric(float64(len(targetUuids[name])))
+			incrementGnmiIncomingSetRequestsBatchingTransactionFailureImpactedTotalMetric(float64(len(targetUuids[name])))
 			a.Logger.Printf("failed batching requests for %s", string(name))
 			for i, reqUuid := range targetUuids[name] {
 				if i == 0 {
@@ -262,7 +262,7 @@ func (a *App) sendBatch(ctx context.Context) {
 						creq.Prefix.Target = name
 					}
 					res, err := t.Set(ctx, creq)
-					incrementGnmiServerGrpcDeviceSetReqTotalMetric()
+					incrementGnmiOutgoingSetRequestsTotalMetric()
 					a.queueResponse[reqUuid] = &QueuedResponse{res, err}
 					delete(a.queueRequest, reqUuid)
 				} else {
@@ -580,7 +580,7 @@ func (a *App) Get(ctx context.Context, req *gnmi.GetRequest) (*gnmi.GetResponse,
 				// Notications which are not in Cache are retrived via gNMI Get request
 				creq.Path = notifPathsNotInCache
 				if len(creq.Path) == 0 {
-					incrementGnmiServerGrpcGetCacheHitTotalMetric()
+					incrementGnmiIncomingGetRequestsCacheHitTotalMetric()
 					allFound = true
 				}
 			}
@@ -620,6 +620,7 @@ func (a *App) Get(ctx context.Context, req *gnmi.GetRequest) (*gnmi.GetResponse,
 }
 
 func (a *App) Set(ctx context.Context, req *gnmi.SetRequest) (*gnmi.SetResponse, error) {
+	incrementGnmiIncomingSetRequestsTotalMetric(1)
 	ok := a.unaryRPCsem.TryAcquire(1)
 	if !ok {
 		return nil, status.Errorf(codes.ResourceExhausted, "max number of Unary RPC reached")
@@ -738,7 +739,7 @@ func (a *App) Set(ctx context.Context, req *gnmi.SetRequest) (*gnmi.SetResponse,
 					creq.Prefix.Target = name
 				}
 				res, err = t.Set(ctx, creq)
-				incrementGnmiServerGrpcDeviceSetReqTotalMetric()
+				incrementGnmiOutgoingSetRequestsTotalMetric()
 			}
 
 			if err != nil {
