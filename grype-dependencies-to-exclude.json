@@ -1,0 +1,12 @@
+[
+    {
+        "name": "google.golang.org/protobuf",
+        "version": "v1.27.1",
+        "type": "go-module",
+        "vulnerabilities": [
+            "CVE-2015-5237",
+            "CVE-2021-22570"
+        ],
+        "reason": "False-Positive, due to a bug on Grype (https://github.com/anchore/grype/issues/558), the CVE are linked on github.com/protocolbuffers/protobuf (C++ library) and Grypes makes the confusion"
+    }
+]
