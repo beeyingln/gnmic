@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -127,6 +128,73 @@ func (a *App) processQueue(ctx context.Context) {
 	}
 }
 
+type OperationType int
+
+const (
+	Delete OperationType = iota
+	Replace
+	Update
+)
+
+type BatchEntry struct {
+	path      string
+	obj       interface{}
+	operation OperationType
+	uuid      string
+}
+type BatchEntryList []*BatchEntry
+
+func (b BatchEntryList) Len() int {
+	return len(b)
+}
+
+func (b BatchEntryList) Less(i, j int) bool {
+	return strings.Compare(b[i].path, b[j].path) < 0
+}
+
+func (b BatchEntryList) Swap(i, j int) {
+	b[i], b[j] = b[j], b[i]
+}
+
+func pathSort(req *gnmi.SetRequest, refDelete map[string][]string, refReplace map[string][]string, refUpdate map[string][]string, target string) {
+	// Create traceability links between the actual entry and the references pointing to it by index
+	var toSort BatchEntryList
+	for i, e := range req.Delete {
+		toSort = append(toSort, &BatchEntry{e.String(), e, Delete, refDelete[target][i]})
+	}
+	for i, e := range req.Replace {
+		toSort = append(toSort, &BatchEntry{e.Path.String(), e, Replace, refReplace[target][i]})
+	}
+	for i, e := range req.Update {
+		toSort = append(toSort, &BatchEntry{e.Path.String(), e, Update, refUpdate[target][i]})
+	}
+
+	// Now sort the list of batchentries
+	sort.Sort(toSort)
+
+	// And now reconstruct the original content...
+	refDelete[target] = []string{}
+	refReplace[target] = []string{}
+	refUpdate[target] = []string{}
+	req.Delete = []*gnmi.Path{}
+	req.Replace = []*gnmi.Update{}
+	req.Update = []*gnmi.Update{}
+
+	for _, e := range toSort {
+		switch e.operation {
+		case Delete:
+			req.Delete = append(req.Delete, e.obj.(*gnmi.Path))
+			refDelete[target] = append(refDelete[target], e.uuid)
+		case Replace:
+			req.Replace = append(req.Replace, e.obj.(*gnmi.Update))
+			refReplace[target] = append(refReplace[target], e.uuid)
+		case Update:
+			req.Update = append(req.Update, e.obj.(*gnmi.Update))
+			refUpdate[target] = append(refUpdate[target], e.uuid)
+		}
+	}
+}
+
 func (a *App) sendBatch(ctx context.Context) {
 	a.queueMutex.Lock()
 	defer a.queueMutex.Unlock()
@@ -234,6 +302,7 @@ func (a *App) sendBatch(ctx context.Context) {
 
 		req, _ := targetMergedRequests[name]
 		creq := proto.Clone(req).(*gnmi.SetRequest)
+		pathSort(creq, targetResponseUuidDelete, targetResponseUuidReplace, targetResponseUuidUpdate, name)
 		if creq.GetPrefix() == nil {
 			creq.Prefix = new(gnmi.Path)
 		}
