@@ -78,6 +78,9 @@ START:
 				select {
 				case <-nctx.Done():
 					a.Logger.Printf("target %q stopped: %v", tc.Name, nctx.Err())
+					// drain errChan
+					err := <-errChan
+					a.Logger.Printf("target %q keepLock returned: %v", tc.Name, err)
 					return
 				case <-doneChan:
 					a.Logger.Printf("target lock %q removed", tc.Name)
@@ -168,11 +171,15 @@ func (a *App) clientSubscribe(ctx context.Context, tc *types.TargetConfig) error
 		}
 		subRequests = append(subRequests, subscriptionRequest{name: sc.Name, req: req})
 	}
+	if t.Cfn != nil {
+		t.Cfn()
+	}
 	gnmiCtx, cancel := context.WithCancel(ctx)
 	t.Cfn = cancel
 CRCLIENT:
 	select {
 	case <-gnmiCtx.Done():
+		return gnmiCtx.Err()
 	default:
 		targetDialOpts := a.dialOpts
 		if a.Config.UseTunnelServer {

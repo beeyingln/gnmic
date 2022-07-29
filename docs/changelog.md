@@ -1,5 +1,60 @@
 ## Changelog
 
+### v0.26.0 - June 28th 2022
+
+- Outputs
+
+    - Add [Prometheus Remote Write output](user_guide/outputs/prometheus_write_output.md), this output type can be used to push metrics to various systems like [Mimir](https://grafana.com/oss/mimir/), [CortexMetrics](https://cortexmetrics.io/), [VictoriaMetrics](https://victoriametrics.com/), [Thanos](https://thanos.io/)...
+    - Add [NATS Jetstream output](user_guide/outputs/jetstream_output.md), it allows to write metrics to NATS jetstream which supports persistency and filtering.
+
+- [gNMI historical subscriptions](https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-history.md#1-purpose)
+
+    `gNMIc` now support historical subscription using the [gNMI history extension](https://github.com/openconfig/reference/blob/master/rpc/gnmi/gnmi-history.md#2-definition)
+
+### v0.25.1 - June 13th 2022
+
+- Upgrade Go version to go1.18.1.
+
+- Fix running `gnmic subscribe` with only Inputs and Outputs configured (no subscriptions or targets).
+
+### v0.25.0 - June 11th 2022
+
+- Processors
+
+    - [Strings replace processor](user_guide/event_processors/event_strings) supports replaces using regular expressions.
+
+    - Processors  are now supported when collecting telemetry using [listen command](cmd/listen.md) (Nokia SROS specific)
+
+- New Processors
+
+    - [Data convert](user_guide/event_processors/event_data_convert.md)
+
+    - [Duration convert](user_guide/event_processors/event_duration_convert.md)
+    
+    - [Value tag](user_guide/event_processors/event_value_tag.md)
+
+- [Clustering](user_guide/HA.md)
+
+    - `gNMIc` supports kubernetes based clustering,
+    i.e you can build `gNMIc` clusters on kubernetes without the need for Consul cluster.
+
+- [Yang path generation](cmd/generate.md)
+
+    - The command `gnmic generate path` supports generating paths for YANG containers.
+    In earlier versions, the paths generation was done for YANG leaves only.
+
+- Internal gNMIc Prometheus metrics
+
+    `gNMIc` exposes additional internal metrics available to be scraped using Prometheus.
+
+- Static tags from target configuration
+
+    - It is now possible to set static tags on events by configuring them under each target.
+
+- Influxdb cache
+
+    The [InfluxDB output](user_guide/outputs/influxdb_output.md) now supports gNMI based caching, allowing to apply processors on multiple event messages at once and batching the written points to InfluxDB.
+
 ### v0.24.0 - March 13th 2022
 
 - [gRPC Tunnel Support](user_guide/tunnel_server.md)

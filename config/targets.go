@@ -13,6 +13,10 @@ import (
 	"golang.org/x/term"
 )
 
+const (
+	defaultTargetBufferSize = 100
+)
+
 var ErrNoTargetsFound = errors.New("no targets found")
 
 func (c *Config) GetTargets() (map[string]*types.TargetConfig, error) {
@@ -111,7 +115,7 @@ func (c *Config) GetTargets() (map[string]*types.TargetConfig, error) {
 		// due to a viper bug that changes env values to lowercase if read
 		// as part of a StringMap or interface{}:
 		// read the target password as a string to maintain its case.
-		// if it's not an empty string set it explicitely
+		// if it's not an empty string set it explicitly
 		pass := c.FileConfig.GetString(fmt.Sprintf("targets/%s/password", name))
 		if pass != "" {
 			*tc.Password = pass
@@ -227,6 +231,9 @@ func (c *Config) SetTargetConfigDefaults(tc *types.TargetConfig) error {
 	}
 	if tc.Gzip == nil {
 		tc.Gzip = &c.Gzip
+	}
+	if tc.BufferSize == 0 {
+		tc.BufferSize = defaultTargetBufferSize
 	}
 	return nil
 }

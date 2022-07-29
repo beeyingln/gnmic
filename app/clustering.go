@@ -120,6 +120,7 @@ func (a *App) startCluster() {
 	leaderKey := a.leaderKey()
 	var err error
 START:
+	// acquire leader key lock
 	for {
 		a.isLeader = false
 		err = nil
@@ -186,7 +187,7 @@ START:
 				}
 			}
 		}()
-		err := a.locker.WatchServices(a.ctx, serviceName, []string{"cluster-name=" + a.Config.Clustering.ClusterName}, membersChan, a.Config.Clustering.ServicesWatchTimer)
+		err := a.locker.WatchServices(ctx, serviceName, []string{"cluster-name=" + a.Config.Clustering.ClusterName}, membersChan, a.Config.Clustering.ServicesWatchTimer)
 		if err != nil {
 			a.Logger.Printf("failed getting services: %v", err)
 			time.Sleep(retryTimer)
@@ -254,8 +255,9 @@ func (a *App) dispatchTargets(ctx context.Context) {
 			}
 			var err error
 			//a.m.RLock()
+			dctx, cancel := context.WithTimeout(ctx, a.Config.Clustering.TargetsWatchTimer)
 			for _, tc := range a.Config.Targets {
-				err = a.dispatchTarget(ctx, tc)
+				err = a.dispatchTarget(dctx, tc)
 				if err != nil {
 					a.Logger.Printf("failed to dispatch target %q: %v", tc.Name, err)
 				}
@@ -272,7 +274,7 @@ func (a *App) dispatchTargets(ctx context.Context) {
 				}
 			}
 			//a.m.RUnlock()
-
+			cancel()
 			select {
 			case <-ctx.Done():
 				return
@@ -284,7 +286,11 @@ func (a *App) dispatchTargets(ctx context.Context) {
 }
 
 func (a *App) dispatchTarget(ctx context.Context, tc *types.TargetConfig) error {
-	locked, err := a.locker.IsLocked(ctx, fmt.Sprintf("gnmic/%s/targets/%s", a.Config.Clustering.ClusterName, tc.Name))
+	if a.Config.Debug {
+		a.Logger.Printf("checking if %q is locked", tc.Name)
+	}
+	key := fmt.Sprintf("gnmic/%s/targets/%s", a.Config.Clustering.ClusterName, tc.Name)
+	locked, err := a.locker.IsLocked(ctx, key)
 	if err != nil {
 		return err
 	}
@@ -321,7 +327,6 @@ SELECTSERVICE:
 			instanceName = splitTag[1]
 		}
 	}
-	key := fmt.Sprintf("gnmic/%s/targets/%s", a.Config.Clustering.ClusterName, tc.Name)
 	a.Logger.Printf("[cluster-leader] waiting for lock %q to be acquired by %q", key, instanceName)
 	retries := 0
 WAIT:
@@ -335,7 +340,7 @@ WAIT:
 		retries++
 		if (retries+1)*int(lockWaitTime) >= int(a.Config.Clustering.TargetAssignmentTimeout) {
 			a.Logger.Printf("[cluster-leader] max retries reached for target %q and service %q, reselecting...", tc.Name, service.ID)
-			err = a.unassignTarget(tc.Name, service.ID)
+			err = a.unassignTarget(ctx, tc.Name, service.ID)
 			if err != nil {
 				a.Logger.Printf("failed to unassign target %q from %q", tc.Name, service.ID)
 			}
@@ -353,7 +358,7 @@ WAIT:
 	retries++
 	if (retries+1)*int(lockWaitTime) >= int(a.Config.Clustering.TargetAssignmentTimeout) {
 		a.Logger.Printf("[cluster-leader] max retries reached for target %q and service %q, reselecting...", tc.Name, service.ID)
-		err = a.unassignTarget(tc.Name, service.ID)
+		err = a.unassignTarget(ctx, tc.Name, service.ID)
 		if err != nil {
 			a.Logger.Printf("failed to unassign target %q from %q", tc.Name, service.ID)
 		}
@@ -385,7 +390,7 @@ func (a *App) selectService(tags []string, denied ...string) (*lockers.Service, 
 			}
 		}
 		if len(matchingInstances) == 1 {
-			return a.apiServices[matchingInstances[0]+"-api"], nil
+			return a.apiServices[fmt.Sprintf("%s-api", matchingInstances[0])], nil
 		}
 		// select instance by load
 		load, err := a.getInstancesLoad(matchingInstances...)
@@ -397,7 +402,7 @@ func (a *App) selectService(tags []string, denied ...string) (*lockers.Service, 
 		if len(load) == 0 {
 			for _, n := range matchingInstances {
 				a.Logger.Printf("selected service name: %s", n)
-				return a.apiServices[n+"-api"], nil
+				return a.apiServices[fmt.Sprintf("%s-api", n)], nil
 			}
 		}
 		for _, d := range denied {
@@ -410,8 +415,10 @@ func (a *App) selectService(tags []string, denied ...string) (*lockers.Service, 
 		}
 		ss := a.getLowLoadInstance(load)
 		a.Logger.Printf("selected service name: %s", ss)
-		srv := a.apiServices[ss+"-api"]
-		return srv, nil
+		if srv, ok := a.apiServices[fmt.Sprintf("%s-api", ss)]; ok {
+			return srv, nil
+		}
+		return a.apiServices[ss], nil
 	}
 	return nil, errNotFound
 }
@@ -523,7 +530,7 @@ func (a *App) getHighestTagsMatches(tagsCount map[string]int) []string {
 	return ss
 }
 
-func (a *App) deleteTarget(name string) error {
+func (a *App) deleteTarget(ctx context.Context, name string) error {
 	errs := make([]error, 0, len(a.apiServices))
 	for _, s := range a.apiServices {
 		scheme := "http"
@@ -543,8 +550,10 @@ func (a *App) deleteTarget(name string) error {
 				},
 			}
 		}
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
 		url := fmt.Sprintf("%s://%s/api/v1/config/targets/%s", scheme, s.Address, name)
-		req, err := http.NewRequestWithContext(a.ctx, http.MethodDelete, url, nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 		if err != nil {
 			a.Logger.Printf("failed to create a delete request: %v", err)
 			errs = append(errs, err)
@@ -553,10 +562,12 @@ func (a *App) deleteTarget(name string) error {
 
 		rsp, err := client.Do(req)
 		if err != nil {
+			rsp.Body.Close()
 			a.Logger.Printf("failed deleting target %q: %v", name, err)
 			errs = append(errs, err)
 			continue
 		}
+		rsp.Body.Close()
 		a.Logger.Printf("received response code=%d, for DELETE %s", rsp.StatusCode, url)
 	}
 	if len(errs) == 0 {
@@ -598,6 +609,7 @@ func (a *App) assignTarget(ctx context.Context, tc *types.TargetConfig, service 
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 	a.Logger.Printf("got response code=%d for target %q config add from %q", resp.StatusCode, tc.Name, service.Address)
 	if resp.StatusCode > 200 {
 		return fmt.Errorf("status code=%d", resp.StatusCode)
@@ -611,6 +623,7 @@ func (a *App) assignTarget(ctx context.Context, tc *types.TargetConfig, service 
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 	a.Logger.Printf("got response code=%d for target %q assignment from %q", resp.StatusCode, tc.Name, service.Address)
 	if resp.StatusCode > 200 {
 		return fmt.Errorf("status code=%d", resp.StatusCode)
@@ -618,7 +631,7 @@ func (a *App) assignTarget(ctx context.Context, tc *types.TargetConfig, service 
 	return nil
 }
 
-func (a *App) unassignTarget(name string, serviceID string) error {
+func (a *App) unassignTarget(ctx context.Context, name string, serviceID string) error {
 	for _, s := range a.apiServices {
 		if s.ID != serviceID {
 			continue
@@ -641,16 +654,20 @@ func (a *App) unassignTarget(name string, serviceID string) error {
 			}
 		}
 		url := fmt.Sprintf("%s://%s/api/v1/targets/%s", scheme, s.Address, name)
-		ctx, cancel := context.WithTimeout(a.ctx, 500*time.Millisecond)
+		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
 		req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 		if err != nil {
+			a.Logger.Printf("failed to create HTTP request: %v", err)
 			continue
 		}
 		rsp, err := client.Do(req)
 		if err != nil {
+			rsp.Body.Close()
+			a.Logger.Printf("failed HTTP request: %v", err)
 			continue
 		}
+		rsp.Body.Close()
 		a.Logger.Printf("received response code=%d, for DELETE %s", rsp.StatusCode, url)
 		break
 	}

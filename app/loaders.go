@@ -47,7 +47,7 @@ START:
 				continue
 			}
 			// clustered, delete target in all instances of the cluster
-			err = a.deleteTarget(del)
+			err = a.deleteTarget(ctx, del)
 			if err != nil {
 				a.Logger.Printf("failed to delete target %q: %v", del, err)
 			}
@@ -69,7 +69,7 @@ START:
 			// clustered, dispatch
 			a.configLock.Lock()
 			a.Config.Targets[add.Name] = add
-			err = a.dispatchTarget(a.ctx, add)
+			err = a.dispatchTarget(ctx, add)
 			if err != nil {
 				a.Logger.Printf("failed dispatching target %q: %v", add.Name, err)
 			}
