@@ -148,10 +148,8 @@ type LocalFlags struct {
 	SubscribeOutput            []string      `mapstructure:"subscribe-output,omitempty" json:"subscribe-output,omitempty" yaml:"subscribe-output,omitempty"`
 	SubscribeWatchConfig       bool          `mapstructure:"subscribe-watch-config,omitempty" json:"subscribe-watch-config,omitempty" yaml:"subscribe-watch-config,omitempty"`
 	SubscribeBackoff           time.Duration `mapstructure:"subscribe-backoff,omitempty" json:"subscribe-backoff,omitempty" yaml:"subscribe-backoff,omitempty"`
-	SubscribeLockRetry         time.Duration `mapstructure:"subscribe-lock-retry,omitempty" json:"subscribe-lock-retry,omitempty" yaml:"subscribe-lock-retry,omitempty"`
-	SubscribeHistorySnapshot   string        `mapstructure:"subscribe-history-snapshot,omitempty" json:"subscribe-history-snapshot,omitempty" yaml:"subscribe-history-snapshot,omitempty"`
-	SubscribeHistoryStart      string        `mapstructure:"subscribe-history-start,omitempty" json:"subscribe-history-start,omitempty" yaml:"subscribe-history-start,omitempty"`
-	SubscribeHistoryEnd        string        `mapstructure:"subscribe-history-end,omitempty" json:"subscribe-history-end,omitempty" yaml:"subscribe-history-end,omitempty"`
+
+	SubscribeLockRetry time.Duration `mapstructure:"subscribe-lock-retry,omitempty" json:"subscribe-lock-retry,omitempty" yaml:"subscribe-lock-retry,omitempty"`
 	// Path
 	PathPathType   string `mapstructure:"path-path-type,omitempty" json:"path-path-type,omitempty" yaml:"path-path-type,omitempty"`
 	PathWithDescr  bool   `mapstructure:"path-descr,omitempty" json:"path-descr,omitempty" yaml:"path-descr,omitempty"`
@@ -199,14 +197,13 @@ type LocalFlags struct {
 	GenerateSetRequestUpdatePath  []string `mapstructure:"generate-update-path,omitempty" json:"generate-update-path,omitempty" yaml:"generate-update-path,omitempty"`
 	GenerateSetRequestReplacePath []string `mapstructure:"generate-replace-path,omitempty" json:"generate-replace-path,omitempty" yaml:"generate-replace-path,omitempty"`
 	// Generate path
-	GeneratePathWithDescr     bool   `mapstructure:"generate-descr,omitempty" json:"generate-descr,omitempty" yaml:"generate-descr,omitempty"`
-	GeneratePathWithPrefix    bool   `mapstructure:"generate-with-prefix,omitempty" json:"generate-with-prefix,omitempty" yaml:"generate-with-prefix,omitempty"`
-	GeneratePathWithTypes     bool   `mapstructure:"generate-types,omitempty" json:"generate-types,omitempty" yaml:"generate-types,omitempty"`
-	GeneratePathSearch        bool   `mapstructure:"generate-search,omitempty" json:"generate-search,omitempty" yaml:"generate-search,omitempty"`
-	GeneratePathPathType      string `mapstructure:"generate-path-path-type,omitempty" json:"generate-path-path-type,omitempty" yaml:"generate-path-path-type,omitempty"`
-	GeneratePathState         bool   `mapstructure:"generate-path-state,omitempty" json:"generate-path-state,omitempty" yaml:"generate-path-state,omitempty"`
-	GeneratePathConfig        bool   `mapstructure:"generate-path-config,omitempty" json:"generate-path-config,omitempty" yaml:"generate-path-config,omitempty"`
-	GeneratePathWithNonLeaves bool   `mapstructure:"generate-path-with-non-leaves,omitempty" json:"generate-path-with-non-leaves,omitempty" yaml:"generate-path-with-non-leaves,omitempty"`
+	GeneratePathWithDescr  bool   `mapstructure:"generate-descr,omitempty" json:"generate-descr,omitempty" yaml:"generate-descr,omitempty"`
+	GeneratePathWithPrefix bool   `mapstructure:"generate-with-prefix,omitempty" json:"generate-with-prefix,omitempty" yaml:"generate-with-prefix,omitempty"`
+	GeneratePathWithTypes  bool   `mapstructure:"generate-types,omitempty" json:"generate-types,omitempty" yaml:"generate-types,omitempty"`
+	GeneratePathSearch     bool   `mapstructure:"generate-search,omitempty" json:"generate-search,omitempty" yaml:"generate-search,omitempty"`
+	GeneratePathPathType   string `mapstructure:"generate-path-path-type,omitempty" json:"generate-path-path-type,omitempty" yaml:"generate-path-path-type,omitempty"`
+	GeneratePathState      bool   `mapstructure:"generate-path-state,omitempty" json:"generate-path-state,omitempty" yaml:"generate-path-state,omitempty"`
+	GeneratePathConfig     bool   `mapstructure:"generate-path-config,omitempty" json:"generate-path-config,omitempty" yaml:"generate-path-config,omitempty"`
 	//
 	DiffPath    []string `mapstructure:"diff-path,omitempty" json:"diff-path,omitempty" yaml:"diff-path,omitempty"`
 	DiffPrefix  string   `mapstructure:"diff-prefix,omitempty" json:"diff-prefix,omitempty" yaml:"diff-prefix,omitempty"`
@@ -248,7 +245,7 @@ func (c *Config) Load(ctx context.Context) error {
 	c.FileConfig.SetEnvKeyReplacer(strings.NewReplacer("/", "_", "-", "_"))
 	c.FileConfig.AutomaticEnv()
 	if c.GlobalFlags.CfgFile != "" {
-		// configuration file path is explicitly set
+		// configuration file path is explicitely set
 		c.FileConfig.SetConfigFile(c.GlobalFlags.CfgFile)
 		configBytes, err := utils.ReadFile(ctx, c.FileConfig.ConfigFileUsed())
 		if err != nil {
@@ -305,15 +302,15 @@ func (c *Config) SetLogger() (io.Writer, int, error) {
 		}
 	}
 	if c.Debug {
-		loggingFlags |= log.Llongfile
+		loggingFlags = loggingFlags | log.Llongfile
 	}
 	c.logger.SetOutput(f)
 	c.logger.SetFlags(loggingFlags)
 	return f, loggingFlags, nil
 }
 
-func (c *Config) SetPersistentFlagsFromFile(cmd *cobra.Command) {
-	// set debug and log values from file before other persistent flags
+func (c *Config) SetPersistantFlagsFromFile(cmd *cobra.Command) {
+	// set debug and log values from file before other persistant flags
 	cmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
 		if f.Name == "debug" || f.Name == "log" {
 			if !f.Changed && c.FileConfig.IsSet(f.Name) {

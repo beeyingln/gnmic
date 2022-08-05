@@ -15,7 +15,6 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/fullstorydev/grpcurl"
 	"github.com/gorilla/mux"
-	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/jhump/protoreflect/desc"
 	"github.com/karimra/gnmic/config"
 	"github.com/karimra/gnmic/formatters"
@@ -111,7 +110,6 @@ func New() *App {
 		sem:        semaphore.NewWeighted(1),
 		configLock: new(sync.RWMutex),
 		Config:     config.New(),
-		reg:        prometheus.NewRegistry(),
 		//
 		operLock:      new(sync.RWMutex),
 		Targets:       make(map[string]*target.Target),
@@ -199,7 +197,7 @@ func (a *App) InitGlobalFlags() {
 }
 
 func (a *App) PreRunE(cmd *cobra.Command, args []string) error {
-	a.Config.SetPersistentFlagsFromFile(a.RootCmd)
+	a.Config.SetPersistantFlagsFromFile(a.RootCmd)
 
 	logOutput, flags, err := a.Config.SetLogger()
 	if err != nil {
@@ -240,6 +238,14 @@ func (a *App) validateGlobals(cmd *cobra.Command) error {
 		}
 		if a.Config.TLSMinVersion != "" {
 			return errors.New("flags --insecure and --tls-min-version are mutually exclusive")
+		}
+	} else {
+		switch cmd.Name() {
+		case "version", "upgrade", "generate", "set-request", "path":
+		default:
+			if a.Config.TLSCa == "" && !a.Config.SkipVerify {
+				return errors.New("for a secure connection, flags --tls-ca or --skip-verify need to be specified")
+			}
 		}
 	}
 	return nil
@@ -317,14 +323,6 @@ func (a *App) createCollectorDialOpts() []grpc.DialOption {
 	if a.Config.Gzip {
 		opts = append(opts, grpc.WithDefaultCallOptions(grpc.UseCompressor(gzip.Name)))
 	}
-	if a.Config.APIServer != nil && a.Config.APIServer.EnableMetrics && a.reg != nil {
-		grpcClientMetrics := grpc_prometheus.NewClientMetrics()
-		opts = append(opts,
-			grpc.WithUnaryInterceptor(grpcClientMetrics.UnaryClientInterceptor()),
-			grpc.WithStreamInterceptor(grpcClientMetrics.StreamClientInterceptor()),
-		)
-		a.reg.MustRegister(grpcClientMetrics)
-	}
 	a.dialOpts = opts
 	return opts
 }
@@ -392,7 +390,7 @@ func (a *App) loadTargets(e fsnotify.Event) {
 		// delete targets
 		for t := range dist {
 			if _, ok := newTargets[t]; !ok {
-				err = a.deleteTarget(ctx, t)
+				err = a.deleteTarget(t)
 				if err != nil {
 					a.Logger.Printf("failed to delete target %q: %v", t, err)
 					continue

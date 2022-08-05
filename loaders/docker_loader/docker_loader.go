@@ -569,8 +569,6 @@ func (d *dockerLoader) runActions(ctx context.Context, tcs map[string]*types.Tar
 		Add: make([]*types.TargetConfig, 0, len(targetOp.Add)),
 		Del: make([]string, 0, len(targetOp.Del)),
 	}
-	ctx, cancel := context.WithTimeout(ctx, d.cfg.Interval)
-	defer cancel()
 	// start gathering goroutine
 	go func() {
 		for {
@@ -595,7 +593,7 @@ func (d *dockerLoader) runActions(ctx context.Context, tcs map[string]*types.Tar
 	for _, tAdd := range targetOp.Add {
 		go func(tc *types.TargetConfig) {
 			defer wg.Done()
-			err := d.runOnAddActions(ctx, tc.Name, tcs)
+			err := d.runOnAddActions(tc.Name, tcs)
 			if err != nil {
 				d.logger.Printf("failed running OnAdd actions: %v", err)
 				return
@@ -607,7 +605,7 @@ func (d *dockerLoader) runActions(ctx context.Context, tcs map[string]*types.Tar
 	for _, tDel := range targetOp.Del {
 		go func(name string) {
 			defer wg.Done()
-			err := d.runOnDeleteActions(ctx, name, tcs)
+			err := d.runOnDeleteActions(name, tcs)
 			if err != nil {
 				d.logger.Printf("failed running OnDelete actions: %v", err)
 				return
@@ -621,7 +619,7 @@ func (d *dockerLoader) runActions(ctx context.Context, tcs map[string]*types.Tar
 	return result, nil
 }
 
-func (d *dockerLoader) runOnAddActions(ctx context.Context, tName string, tcs map[string]*types.TargetConfig) error {
+func (d *dockerLoader) runOnAddActions(tName string, tcs map[string]*types.TargetConfig) error {
 	aCtx := &actions.Context{
 		Input:   tName,
 		Env:     make(map[string]interface{}),
@@ -630,7 +628,7 @@ func (d *dockerLoader) runOnAddActions(ctx context.Context, tName string, tcs ma
 	}
 	for _, act := range d.addActions {
 		d.logger.Printf("running action %q for target %q", act.NName(), tName)
-		res, err := act.Run(ctx, aCtx)
+		res, err := act.Run(aCtx)
 		if err != nil {
 			// delete target from known targets map
 			d.m.Lock()
@@ -649,10 +647,10 @@ func (d *dockerLoader) runOnAddActions(ctx context.Context, tName string, tcs ma
 	return nil
 }
 
-func (d *dockerLoader) runOnDeleteActions(ctx context.Context, tName string, tcs map[string]*types.TargetConfig) error {
+func (d *dockerLoader) runOnDeleteActions(tName string, tcs map[string]*types.TargetConfig) error {
 	env := make(map[string]interface{})
 	for _, act := range d.delActions {
-		res, err := act.Run(ctx, &actions.Context{Input: tName, Env: env, Vars: d.vars})
+		res, err := act.Run(&actions.Context{Input: tName, Env: env, Vars: d.vars})
 		if err != nil {
 			return fmt.Errorf("action %q for target %q failed: %v", act.NName(), tName, err)
 		}

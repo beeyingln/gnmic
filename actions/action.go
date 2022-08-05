@@ -1,7 +1,6 @@
 package actions
 
 import (
-	"context"
 	"log"
 
 	"github.com/karimra/gnmic/types"
@@ -18,7 +17,7 @@ type Action interface {
 	//  - `Vars`   : a map[string]interface{} containing variables passed to the action
 	//  - `Targets`: a map[string]*types.TargetConfig containing (if the action is ran by a loader)
 	//               the currently known targets configurations
-	Run(ctx context.Context, aCtx *Context) (interface{}, error)
+	Run(aCtx *Context) (interface{}, error)
 	// NName returns the configured action name
 	NName() string
 	// WithTargets passes the known configured targets to the action when initialized

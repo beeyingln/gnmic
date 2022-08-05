@@ -74,9 +74,6 @@ func (a *App) DeleteTarget(ctx context.Context, name string) error {
 	if cfn, ok := a.targetsLockFn[name]; ok {
 		cfn()
 	}
-	if a.c != nil && a.c.HasTarget(name) {
-		a.c.Remove(name)
-	}
 	if t, ok := a.Targets[name]; ok {
 		delete(a.Targets, name)
 		t.Close()
@@ -89,7 +86,7 @@ func (a *App) DeleteTarget(ctx context.Context, name string) error {
 
 // AddTargetConfig adds a *TargetConfig to the configuration map
 func (a *App) AddTargetConfig(tc *types.TargetConfig) {
-	a.Logger.Printf("adding target %s", tc)
+	a.Logger.Printf("adding target %+v", tc)
 	_, ok := a.Config.Targets[tc.Name]
 	if ok {
 		return

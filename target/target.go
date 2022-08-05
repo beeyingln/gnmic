@@ -3,7 +3,6 @@ package target
 import (
 	"context"
 	"fmt"
-	"net"
 	"strings"
 	"sync"
 
@@ -11,7 +10,6 @@ import (
 	"github.com/karimra/gnmic/types"
 	"github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/gnmi/proto/gnmi_ext"
-	"golang.org/x/net/proxy"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
@@ -57,7 +55,7 @@ func NewTarget(c *types.TargetConfig) *Target {
 		subscribeCancelFn:  make(map[string]context.CancelFunc),
 		pollChan:           make(chan string),
 		subscribeResponses: make(chan *SubscribeResponse, c.BufferSize),
-		errors:             make(chan *TargetError, c.BufferSize),
+		errors:             make(chan *TargetError),
 		StopChan:           make(chan struct{}),
 	}
 	return t
@@ -83,28 +81,6 @@ func (t *Target) CreateGNMIClient(ctx context.Context, opts ...grpc.DialOption) 
 		go func(addr string) {
 			timeoutCtx, cancel := context.WithTimeout(ctx, t.Config.Timeout)
 			defer cancel()
-			if t.Config.Proxy != "" {
-				if idx := strings.Index(t.Config.Proxy, "://"); idx >= 0 {
-					proxyType := t.Config.Proxy[:idx]
-					proxyAddress := t.Config.Proxy[idx+3:]
-					if proxyType == "socks5" {
-						opts = append(opts, grpc.WithContextDialer(
-							func(ctx context.Context, addr string) (net.Conn, error) {
-								dialer, err := proxy.SOCKS5("tcp", proxyAddress, nil,
-									&net.Dialer{
-										Timeout:   t.Config.Timeout,
-										KeepAlive: t.Config.Timeout,
-									},
-								)
-								if err != nil {
-									errC <- fmt.Errorf("%s: %v", addr, err)
-									return nil, err
-								}
-								return dialer.Dial("tcp", addr)
-							}))
-					}
-				}
-			}
 			conn, err := grpc.DialContext(timeoutCtx, addr, opts...)
 			if err != nil {
 				errC <- fmt.Errorf("%s: %v", addr, err)

@@ -12,7 +12,7 @@
 : ${REPO_NAME:="karimra/gnmic"}
 : ${REPO_URL:="https://github.com/$REPO_NAME"}
 : ${PROJECT_URL:="https://gnmic.kmrd.dev"}
-: ${LATEST_URL:="https://api.github.com/repos/$REPO_NAME/releases/latest"}
+
 # detectArch discovers the architecture for this system.
 detectArch() {
     ARCH=$(uname -m)
@@ -58,10 +58,6 @@ runAsRoot() {
 # verifySupported checks that the os/arch combination is supported
 verifySupported() {
     local supported="darwin-x86_64\ndarwin-aarch64\nlinux-i386\nlinux-x86_64\nlinux-armv7\nlinux-aarch64"
-    # change ARCH to "aarch64" if OS="darwin" and ARCH="arm64"
-    if [ ${OS} == "darwin" ] && [ ${ARCH} == "arm64" ]; then
-        ARCH="aarch64"
-    fi
     if ! echo "${supported}" | grep -q "${OS}-${ARCH}"; then
         echo "No prebuilt binary for ${OS}-${ARCH}."
         echo "To build from source, go to ${REPO_URL}"
@@ -90,30 +86,17 @@ setDesiredVersion() {
     if [ "x$DESIRED_VERSION" == "x" ]; then
         # when desired version is not provided
         # get latest tag from the gh releases
-        local cmd=""
         if type "curl" &>/dev/null; then
-            cmd="curl -s "
+            local latest_release_url=$(curl -s $REPO_URL/releases/latest | cut -d '"' -f 2)
+            TAG=$(echo $latest_release_url | cut -d '"' -f 2 | awk -F "/" '{print $NF}')
+            # tag with stripped `v` prefix
+            TAG_WO_VER=$(echo "${TAG}" | cut -c 2-)
         elif type "wget" &>/dev/null; then
-            cmd="wget -q -O- "
-        else
-            echo "Missing curl or wget utility to download the installation package"
-            exit 1
+            # get latest release info and get 5th line out of the response to get the URL
+            local latest_release_url=$(wget -q https://api.github.com/repos/$REPO_NAME/releases/latest -O- | sed '5q;d' | cut -d '"' -f 4)
+            TAG=$(echo $latest_release_url | cut -d '"' -f 2 | awk -F "/" '{print $NF}')
+            TAG_WO_VER=$(echo "${TAG}" | cut -c 2-)
         fi
-        local latest_release_url=""
-        # use jq to filter the api response if available
-        if type "jq" &>/dev/null; then
-            latest_release_url=$($cmd $LATEST_URL | jq -r .html_url)
-        # else use grep and cut
-        else
-            latest_release_url=$($cmd $LATEST_URL | grep "html_url.*releases/tag" | cut -d '"' -f 4)
-        fi
-        if [ "x$latest_release_url" == "x" ]; then
-            echo "Could not determine the latest release"
-            exit 1
-        fi
-        TAG=$(echo $latest_release_url | cut -d '"' -f 2 | awk -F "/" '{print $NF}')
-        # tag with stripped `v` prefix
-        TAG_WO_VER=$(echo "${TAG}" | cut -c 2-)
     else
         TAG=$DESIRED_VERSION
         TAG_WO_VER=$(echo "${TAG}" | cut -c 2-)
@@ -153,6 +136,10 @@ downloadFile() {
             exit 1
         fi
         EXT=$PKG_FORMAT
+    fi
+    # change ARCH to "aarch64" if OS="darwin" and ARCH="arm64"
+    if [ ${OS} == "darwin" ] && [ ${ARCH} == "arm64" ]; then
+        ARCH="aarch64"
     fi
     ARCHIVE="${PROJECT_NAME}_${TAG_WO_VER}_${OS}_${ARCH}.${EXT}"
     DOWNLOAD_URL="${REPO_URL}/releases/download/${TAG}/${ARCHIVE}"

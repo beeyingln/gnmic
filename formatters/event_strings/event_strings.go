@@ -12,15 +12,11 @@ import (
 	"github.com/karimra/gnmic/formatters"
 	"github.com/karimra/gnmic/types"
 	"github.com/karimra/gnmic/utils"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 )
 
 const (
 	processorType = "event-strings"
 	loggingPrefix = "[" + processorType + "] "
-	nameField     = "name"
-	valueField    = "value"
 )
 
 // Strings provides some of Golang's strings functions to transform: tags, tag names, values and value names
@@ -246,9 +242,9 @@ func (t *transform) apply(k string, v interface{}) (string, interface{}) {
 
 func (t *transform) replace(k string, v interface{}) (string, interface{}) {
 	switch t.ApplyOn {
-	case nameField:
+	case "name":
 		k = t.replaceRegexp.ReplaceAllString(k, t.New)
-	case valueField:
+	case "value":
 		if vs, ok := v.(string); ok {
 			v = t.replaceRegexp.ReplaceAllString(vs, t.New)
 		}
@@ -258,9 +254,9 @@ func (t *transform) replace(k string, v interface{}) (string, interface{}) {
 
 func (t *transform) trimPrefix(k string, v interface{}) (string, interface{}) {
 	switch t.ApplyOn {
-	case nameField:
+	case "name":
 		k = strings.TrimPrefix(k, t.Prefix)
-	case valueField:
+	case "value":
 		if vs, ok := v.(string); ok {
 			v = strings.TrimPrefix(vs, t.Prefix)
 		}
@@ -270,9 +266,9 @@ func (t *transform) trimPrefix(k string, v interface{}) (string, interface{}) {
 
 func (t *transform) trimSuffix(k string, v interface{}) (string, interface{}) {
 	switch t.ApplyOn {
-	case nameField:
+	case "name":
 		k = strings.TrimSuffix(k, t.Suffix)
-	case valueField:
+	case "value":
 		if vs, ok := v.(string); ok {
 			v = strings.TrimSuffix(vs, t.Suffix)
 		}
@@ -282,11 +278,11 @@ func (t *transform) trimSuffix(k string, v interface{}) (string, interface{}) {
 
 func (t *transform) toTitle(k string, v interface{}) (string, interface{}) {
 	switch t.ApplyOn {
-	case nameField:
-		k = cases.Title(language.English).String(k)
-	case valueField:
+	case "name":
+		k = strings.Title(k)
+	case "value":
 		if vs, ok := v.(string); ok {
-			v = cases.Title(language.English).String(vs)
+			v = strings.Title(vs)
 		}
 	}
 	return k, v
@@ -294,9 +290,9 @@ func (t *transform) toTitle(k string, v interface{}) (string, interface{}) {
 
 func (t *transform) toLower(k string, v interface{}) (string, interface{}) {
 	switch t.ApplyOn {
-	case nameField:
+	case "name":
 		k = strings.ToLower(k)
-	case valueField:
+	case "value":
 		if vs, ok := v.(string); ok {
 			v = strings.ToLower(vs)
 		}
@@ -306,9 +302,9 @@ func (t *transform) toLower(k string, v interface{}) (string, interface{}) {
 
 func (t *transform) toUpper(k string, v interface{}) (string, interface{}) {
 	switch t.ApplyOn {
-	case nameField:
+	case "name":
 		k = strings.ToUpper(k)
-	case valueField:
+	case "value":
 		if vs, ok := v.(string); ok {
 			v = strings.ToUpper(vs)
 		}
@@ -318,14 +314,14 @@ func (t *transform) toUpper(k string, v interface{}) (string, interface{}) {
 
 func (t *transform) split(k string, v interface{}) (string, interface{}) {
 	switch t.ApplyOn {
-	case nameField:
+	case "name":
 		items := strings.Split(k, t.SplitOn)
 		numItems := len(items)
 		if numItems <= t.IgnoreFirst || numItems <= t.IgnoreLast || t.IgnoreFirst >= numItems-t.IgnoreLast {
 			return "", v
 		}
 		k = strings.Join(items[t.IgnoreFirst:numItems-t.IgnoreLast], t.JoinWith)
-	case valueField:
+	case "value":
 		if vs, ok := v.(string); ok {
 			items := strings.Split(vs, t.SplitOn)
 			numItems := len(items)
@@ -340,9 +336,9 @@ func (t *transform) split(k string, v interface{}) (string, interface{}) {
 
 func (t *transform) pathBase(k string, v interface{}) (string, interface{}) {
 	switch t.ApplyOn {
-	case nameField:
+	case "name":
 		k = filepath.Base(k)
-	case valueField:
+	case "value":
 		if vs, ok := v.(string); ok {
 			v = filepath.Base(vs)
 		}

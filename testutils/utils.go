@@ -5,7 +5,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/openconfig/gnmi/proto/gnmi"
-	"github.com/openconfig/gnmi/proto/gnmi_ext"
 	tpb "github.com/openconfig/grpctunnel/proto/tunnel"
 )
 
@@ -119,32 +118,6 @@ func SubscribeRequestsEqual(req1, req2 *gnmi.SubscribeRequest) bool {
 	}
 	if req1 == nil || req2 == nil {
 		return false
-	}
-	if len(req1.GetExtension()) != len(req2.GetExtension()) {
-		return false
-	}
-	// only checks if extensions are of the same type
-	for i, ext := range req1.GetExtension() {
-		switch ext.Ext.(type) {
-		case *gnmi_ext.Extension_RegisteredExt:
-			switch req2.GetExtension()[i].Ext.(type) {
-			case *gnmi_ext.Extension_RegisteredExt:
-			default:
-				return false
-			}
-		case *gnmi_ext.Extension_History:
-			switch req2.GetExtension()[i].Ext.(type) {
-			case *gnmi_ext.Extension_History:
-			default:
-				return false
-			}
-		case *gnmi_ext.Extension_MasterArbitration:
-			switch req2.GetExtension()[i].Ext.(type) {
-			case *gnmi_ext.Extension_MasterArbitration:
-			default:
-				return false
-			}
-		}
 	}
 	switch req1.Request.(type) {
 	case *gnmi.SubscribeRequest_Subscribe:
@@ -479,11 +452,9 @@ func GnmiValuesEqual(v1, v2 *gnmi.TypedValue) bool {
 			if v1 == nil || v2 == nil {
 				return false
 			}
-			//lint:ignore SA1019 still need DecimalVal for backward compatibility
 			if v1.DecimalVal.GetDigits() != v2.DecimalVal.GetDigits() {
 				return false
 			}
-			//lint:ignore SA1019 still need DecimalVal for backward compatibility
 			return v1.DecimalVal.GetPrecision() == v2.DecimalVal.GetPrecision()
 		default:
 			return false
@@ -497,7 +468,6 @@ func GnmiValuesEqual(v1, v2 *gnmi.TypedValue) bool {
 			if v1 == nil || v2 == nil {
 				return false
 			}
-			//lint:ignore SA1019 still need FloatVal for backward compatibility
 			return v1.FloatVal == v2.FloatVal
 		default:
 			return false

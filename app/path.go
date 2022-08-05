@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/google/gnxi/utils/xpath"
 	"github.com/karimra/gnmic/utils"
 	"github.com/manifoldco/promptui"
 	"github.com/openconfig/goyang/pkg/yang"
@@ -17,15 +18,14 @@ import (
 )
 
 type pathGenOpts struct {
-	search        bool
-	withDescr     bool
-	withTypes     bool
-	withPrefix    bool
-	pathType      string
-	stateOnly     bool
-	configOnly    bool
-	json          bool
-	withNonLeaves bool
+	search     bool
+	withDescr  bool
+	withTypes  bool
+	withPrefix bool
+	pathType   string
+	stateOnly  bool
+	configOnly bool
+	json       bool
 }
 
 type generatedPath struct {
@@ -65,13 +65,9 @@ func (a *App) PathCmdRun(d, f, e []string, pgo pathGenOpts) error {
 
 	collected := make([]*yang.Entry, 0, 256)
 	for _, entry := range a.SchemaTree.Dir {
-		collected = append(collected, collectSchemaNodes(entry, !pgo.withNonLeaves)...)
+		collected = append(collected, collectSchemaNodes(entry, true)...)
 	}
 	for _, entry := range collected {
-		// don't produce such paths in case of non-leaves
-		if entry.IsCase() || entry.IsChoice() {
-			continue
-		}
 		if !pgo.stateOnly && !pgo.configOnly || pgo.stateOnly && pgo.configOnly {
 			out <- a.generatePath(entry, pgo.pathType)
 			continue
@@ -261,13 +257,7 @@ func (a *App) generatePath(entry *yang.Entry, pType string) *generatedPath {
 	}
 
 	gp.Description = entry.Description
-	if entry.Type != nil {
-		gp.Type = entry.Type.Name
-	} else if entry.IsList() {
-		gp.Type = "[list]"
-	} else {
-		gp.Type = "[container]"
-	}
+	gp.Type = entry.Type.Name
 
 	if entry.IsLeafList() {
 		gp.Default = strings.Join(entry.DefaultValues(), ", ")
@@ -278,7 +268,7 @@ func (a *App) generatePath(entry *yang.Entry, pType string) *generatedPath {
 	gp.IsState = isState(entry)
 	gp.Namespace = entry.Namespace().NName()
 	if pType == "gnmi" {
-		gnmiPath, err := utils.ParsePath(gp.Path)
+		gnmiPath, err := xpath.ToGNMIPath(gp.Path)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "path: %s could not be changed to gnmi format: %v\n", gp.Path, err)
 		}

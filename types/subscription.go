@@ -7,10 +7,6 @@ import (
 	"time"
 )
 
-const (
-	notApplicable = "NA"
-)
-
 // SubscriptionConfig //
 type SubscriptionConfig struct {
 	Name              string         `mapstructure:"name,omitempty" json:"name,omitempty"`
@@ -27,13 +23,6 @@ type SubscriptionConfig struct {
 	HeartbeatInterval *time.Duration `mapstructure:"heartbeat-interval,omitempty" json:"heartbeat-interval,omitempty"`
 	SuppressRedundant bool           `mapstructure:"suppress-redundant,omitempty" json:"suppress-redundant,omitempty"`
 	UpdatesOnly       bool           `mapstructure:"updates-only,omitempty" json:"updates-only,omitempty"`
-	History           *HistoryConfig `mapstructure:"history,omitempty" json:"history,omitempty"`
-}
-
-type HistoryConfig struct {
-	Snapshot string `mapstructure:"snapshot,omitempty" json:"snapshot,omitempty"`
-	Start    string `mapstructure:"start,omitempty" json:"start,omitempty"`
-	End      string `mapstructure:"end,omitempty" json:"end,omitempty"`
 }
 
 // String //
@@ -51,7 +40,7 @@ func (sc *SubscriptionConfig) PathsString() string {
 
 func (sc *SubscriptionConfig) PrefixString() string {
 	if sc.Prefix == "" {
-		return notApplicable
+		return "NA"
 	}
 	return sc.Prefix
 }
@@ -67,7 +56,7 @@ func (sc *SubscriptionConfig) SampleIntervalString() string {
 	if strings.ToLower(sc.Mode) == "stream" && strings.ToLower(sc.StreamMode) == "sample" {
 		return sc.SampleInterval.String()
 	}
-	return notApplicable
+	return "NA"
 }
 
 func (sc *SubscriptionConfig) ModelsString() string {
@@ -76,7 +65,7 @@ func (sc *SubscriptionConfig) ModelsString() string {
 
 func (sc *SubscriptionConfig) QosString() string {
 	if sc.Qos == nil {
-		return notApplicable
+		return "NA"
 	}
 	return fmt.Sprintf("%d", *sc.Qos)
 }

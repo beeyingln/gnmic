@@ -26,7 +26,7 @@ func (a *App) CapPreRunE(cmd *cobra.Command, args []string) error {
 func (a *App) CapRunE(cmd *cobra.Command, args []string) error {
 	defer a.InitCapabilitiesFlags(cmd)
 
-	if a.Config.Format == formatEvent {
+	if a.Config.Format == "event" {
 		return fmt.Errorf("format event not supported for Capabilities RPC")
 	}
 	ctx, cancel := context.WithCancel(a.ctx)

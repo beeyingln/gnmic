@@ -16,11 +16,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const (
-	subscriptionModeONCE = "ONCE"
-	subscriptionModePOLL = "POLL"
-)
-
 func (a *App) StartCollector(ctx context.Context) {
 	defer func() {
 		for _, o := range a.Outputs {
@@ -57,13 +52,12 @@ func (a *App) StartCollector(ctx context.Context) {
 			for {
 				select {
 				case rsp := <-rspChan:
-					subscribeResponseReceivedCounter.WithLabelValues(t.Config.Name, rsp.SubscriptionConfig.Name).Add(1)
 					if a.Config.Debug {
-						a.Logger.Printf("target %q: gNMI Subscribe Response: %+v", t.Config.Name, rsp)
+						a.Logger.Printf("received gNMI Subscribe Response: %+v", rsp)
 					}
 					err := t.DecodeProtoBytes(rsp.Response)
 					if err != nil {
-						a.Logger.Printf("target %q: failed to decode proto bytes: %v", t.Config.Name, err)
+						a.Logger.Printf("target %q, failed to decode proto bytes: %v", t.Config.Name, err)
 						continue
 					}
 					m := outputs.Meta{
@@ -74,16 +68,13 @@ func (a *App) StartCollector(ctx context.Context) {
 					if rsp.SubscriptionConfig.Target != "" {
 						m["subscription-target"] = rsp.SubscriptionConfig.Target
 					}
-					for k, v := range t.Config.EventTags {
-						m[k] = v
-					}
-					if a.subscriptionMode(rsp.SubscriptionName) == subscriptionModeONCE {
+					if a.subscriptionMode(rsp.SubscriptionName) == "ONCE" {
 						a.Export(ctx, rsp.Response, m, t.Config.Outputs...)
 					} else {
 						go a.Export(ctx, rsp.Response, m, t.Config.Outputs...)
 					}
 					if remainingOnceSubscriptions > 0 {
-						if a.subscriptionMode(rsp.SubscriptionName) == subscriptionModeONCE {
+						if a.subscriptionMode(rsp.SubscriptionName) == "ONCE" {
 							switch rsp.Response.Response.(type) {
 							case *gnmi.SubscribeResponse_SyncResponse:
 								remainingOnceSubscriptions--
@@ -98,12 +89,12 @@ func (a *App) StartCollector(ctx context.Context) {
 					}
 				case tErr := <-errChan:
 					if errors.Is(tErr.Err, io.EOF) {
-						a.Logger.Printf("target %q: subscription %s closed stream(EOF)", t.Config.Name, tErr.SubscriptionName)
+						a.Logger.Printf("target %q, subscription %s closed stream(EOF)", t.Config.Name, tErr.SubscriptionName)
 					} else {
-						a.Logger.Printf("target %q: subscription %s rcv error: %v", t.Config.Name, tErr.SubscriptionName, tErr.Err)
+						a.Logger.Printf("target %q, subscription %s rcv error: %v", t.Config.Name, tErr.SubscriptionName, tErr.Err)
 					}
 					if remainingOnceSubscriptions > 0 {
-						if a.subscriptionMode(tErr.SubscriptionName) == subscriptionModeONCE {
+						if a.subscriptionMode(tErr.SubscriptionName) == "ONCE" {
 							remainingOnceSubscriptions--
 						}
 					}
@@ -114,10 +105,10 @@ func (a *App) StartCollector(ctx context.Context) {
 						return
 					}
 				case <-t.StopChan:
+					a.Logger.Printf("stopping target %q listener", t.Config.Name)
 					a.operLock.Lock()
 					delete(a.activeTargets, t.Config.Name)
 					a.operLock.Unlock()
-					a.Logger.Printf("target %q: listener stopped", t.Config.Name)
 					return
 				case <-ctx.Done():
 					a.operLock.Lock()
@@ -139,7 +130,7 @@ func (a *App) Export(ctx context.Context, rsp *gnmi.SubscribeResponse, m outputs
 	}
 	go a.updateCache(rsp, m)
 	wg := new(sync.WaitGroup)
-	// target has no outputs explicitly defined
+	// target has no outputs explicitely defined
 	if len(outs) == 0 {
 		wg.Add(len(a.Outputs))
 		for _, o := range a.Outputs {
@@ -221,7 +212,7 @@ func (a *App) PolledSubscriptionsTargets() map[string][]string {
 	result := make(map[string][]string)
 	for tn, target := range a.Targets {
 		for _, sub := range target.Subscriptions {
-			if strings.ToUpper(sub.Mode) == subscriptionModePOLL {
+			if strings.ToUpper(sub.Mode) == "POLL" {
 				if result[tn] == nil {
 					result[tn] = make([]string, 0)
 				}

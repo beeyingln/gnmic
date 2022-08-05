@@ -45,15 +45,11 @@ nav:
       - Outputs:
           - Introduction: user_guide/outputs/output_intro.md
           - File: user_guide/outputs/file_output.md
-          - NATS:
-            - NATS: user_guide/outputs/nats_output.md
-            - STAN: user_guide/outputs/stan_output.md
-            - Jetstream: user_guide/outputs/jetstream_output.md
+          - NATS: user_guide/outputs/nats_output.md
+          - STAN: user_guide/outputs/stan_output.md
           - Kafka: user_guide/outputs/kafka_output.md
           - InfluxDB: user_guide/outputs/influxdb_output.md
-          - Prometheus:  
-            - Scrape Based (Pull): user_guide/outputs/prometheus_output.md
-            - Remote Write (Push): user_guide/outputs/prometheus_write_output.md
+          - Prometheus:  user_guide/outputs/prometheus_output.md
           - gNMI Server: user_guide/outputs/gnmi_output.md
           - TCP: user_guide/outputs/tcp_output.md
           - UDP: user_guide/outputs/udp_output.md
@@ -63,11 +59,9 @@ nav:
           - Add Tag: user_guide/event_processors/event_add_tag.md
           - Allow: user_guide/event_processors/event_allow.md
           - Convert: user_guide/event_processors/event_convert.md
-          - Data Convert: user_guide/event_processors/event_data_convert.md
           - Date string: user_guide/event_processors/event_date_string.md
           - Delete: user_guide/event_processors/event_delete.md
           - Drop: user_guide/event_processors/event_drop.md
-          - Duration Convert: user_guide/event_processors/event_duration_convert.md
           - Extract Tags: user_guide/event_processors/event_extract_tags.md
           - Group by: user_guide/event_processors/event_group_by.md
           - JQ: user_guide/event_processors/event_jq.md
@@ -76,7 +70,6 @@ nav:
           - Strings: user_guide/event_processors/event_strings.md
           - To Tag: user_guide/event_processors/event_to_tag.md
           - Trigger: user_guide/event_processors/event_trigger.md
-          - Value Tag: user_guide/event_processors/event_value_tag.md
           - Write: user_guide/event_processors/event_write.md
 
       - Actions: user_guide/actions/actions.md

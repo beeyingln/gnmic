@@ -10,20 +10,13 @@ import (
 	"github.com/openconfig/gnmi/proto/gnmi"
 )
 
-// EventMsg represents a gNMI update message,
-// The name is derived from the subscription in case the update was received in a subscribeResponse
-// the tags are derived from the keys in gNMI path as well as some metadata from the subscription.
+// EventMsg //
 type EventMsg struct {
-	Name      string                 `json:"name,omitempty"`
+	Name      string                 `json:"name,omitempty"` // measurement name
 	Timestamp int64                  `json:"timestamp,omitempty"`
 	Tags      map[string]string      `json:"tags,omitempty"`
 	Values    map[string]interface{} `json:"values,omitempty"`
 	Deletes   []string               `json:"deletes,omitempty"`
-}
-
-func (e *EventMsg) String() string {
-	b, _ := json.Marshal(e)
-	return string(b)
 }
 
 // ResponseToEventMsgs //
@@ -31,13 +24,33 @@ func ResponseToEventMsgs(name string, rsp *gnmi.SubscribeResponse, meta map[stri
 	if rsp == nil {
 		return nil, nil
 	}
+	var err error
 	evs := make([]*EventMsg, 0)
 	switch rsp := rsp.Response.(type) {
 	case *gnmi.SubscribeResponse_Update:
 		namePrefix, prefixTags := TagsFromGNMIPath(rsp.Update.Prefix)
-		// notification updates
 		for _, upd := range rsp.Update.GetUpdate() {
-			e, err := updateToEvent(name, namePrefix, rsp.Update.Timestamp, upd, prefixTags)
+			e := &EventMsg{
+				Tags:   make(map[string]string),
+				Values: make(map[string]interface{}),
+			}
+			e.Timestamp = rsp.Update.Timestamp
+			e.Name = name
+			for k, v := range prefixTags {
+				e.Tags[k] = v
+			}
+			pathName, pTags := TagsFromGNMIPath(upd.Path)
+			pathName = strings.TrimRight(namePrefix, "/") + "/" + strings.TrimLeft(pathName, "/")
+			for k, v := range pTags {
+				if vv, ok := e.Tags[k]; ok {
+					if v != vv {
+						e.Tags[pathName+":::"+k] = v
+					}
+					continue
+				}
+				e.Tags[k] = v
+			}
+			e.Values, err = getValueFlat(pathName, upd.GetVal())
 			if err != nil {
 				return nil, err
 			}
@@ -46,7 +59,7 @@ func ResponseToEventMsgs(name string, rsp *gnmi.SubscribeResponse, meta map[stri
 					continue
 				}
 				if _, ok := e.Tags[k]; ok {
-					e.Tags[fmt.Sprintf("meta_%s", k)] = v
+					e.Tags["meta:"+k] = v
 					continue
 				}
 				e.Tags[k] = v
@@ -58,15 +71,14 @@ func ResponseToEventMsgs(name string, rsp *gnmi.SubscribeResponse, meta map[stri
 		for _, ep := range eps {
 			evs = ep.Apply(evs...)
 		}
-		// notification deletes
+
 		if len(rsp.Update.Delete) > 0 {
 			e := &EventMsg{
-				Name:      name,
-				Timestamp: rsp.Update.Timestamp,
-				Tags:      make(map[string]string),
-				Deletes:   make([]string, 0, len(rsp.Update.Delete)),
+				Tags:    make(map[string]string),
+				Deletes: make([]string, 0, len(rsp.Update.Delete)),
 			}
-			// build tags
+			e.Timestamp = rsp.Update.Timestamp
+			e.Name = name
 			for k, v := range prefixTags {
 				e.Tags[k] = v
 			}
@@ -75,12 +87,11 @@ func ResponseToEventMsgs(name string, rsp *gnmi.SubscribeResponse, meta map[stri
 					continue
 				}
 				if _, ok := e.Tags[k]; ok {
-					e.Tags[fmt.Sprintf("meta_%s", k)] = v
+					e.Tags["meta:"+k] = v
 					continue
 				}
 				e.Tags[k] = v
 			}
-			// add paths
 			for _, del := range rsp.Update.Delete {
 				e.Deletes = append(e.Deletes, utils.GnmiPathToXPath(del, false))
 			}
@@ -94,11 +105,32 @@ func GetResponseToEventMsgs(rsp *gnmi.GetResponse, meta map[string]string, eps .
 	if rsp == nil {
 		return nil, nil
 	}
+	var err error
 	evs := make([]*EventMsg, 0)
 	for _, notif := range rsp.GetNotification() {
 		namePrefix, prefixTags := TagsFromGNMIPath(notif.GetPrefix())
 		for _, upd := range notif.GetUpdate() {
-			e, err := updateToEvent("get-request", namePrefix, notif.GetTimestamp(), upd, prefixTags)
+			e := &EventMsg{
+				Tags:   make(map[string]string),
+				Values: make(map[string]interface{}),
+			}
+			e.Timestamp = notif.GetTimestamp()
+			e.Name = "get-request"
+			for k, v := range prefixTags {
+				e.Tags[k] = v
+			}
+			pathName, pTags := TagsFromGNMIPath(upd.Path)
+			pathName = strings.TrimRight(namePrefix, "/") + "/" + strings.TrimLeft(pathName, "/")
+			for k, v := range pTags {
+				if vv, ok := e.Tags[k]; ok {
+					if v != vv {
+						e.Tags[pathName+":::"+k] = v
+					}
+					continue
+				}
+				e.Tags[k] = v
+			}
+			e.Values, err = getValueFlat(pathName, upd.GetVal())
 			if err != nil {
 				return nil, err
 			}
@@ -123,42 +155,7 @@ func GetResponseToEventMsgs(rsp *gnmi.GetResponse, meta map[string]string, eps .
 	return evs, nil
 }
 
-func updateToEvent(name, prefix string, ts int64, upd *gnmi.Update, tags map[string]string) (*EventMsg, error) {
-	e := &EventMsg{
-		Name:      name,
-		Timestamp: ts,
-		Tags:      make(map[string]string),
-		Values:    make(map[string]interface{}),
-	}
-	for k, v := range tags {
-		e.Tags[k] = v
-	}
-	pathName, pTags := TagsFromGNMIPath(upd.Path)
-	psb := strings.Builder{}
-	psb.WriteString(strings.TrimRight(prefix, "/"))
-	psb.WriteString("/")
-	psb.WriteString(strings.TrimLeft(pathName, "/"))
-	pathName = psb.String()
-	for k, v := range pTags {
-		if vv, ok := e.Tags[k]; ok {
-			if v != vv {
-				e.Tags[fmt.Sprintf("%s_%s", pathName, k)] = v
-			}
-			continue
-		}
-		e.Tags[k] = v
-	}
-	var err error
-	e.Values, err = getValueFlat(pathName, upd.GetVal())
-	if err != nil {
-		return nil, err
-	}
-	return e, nil
-}
-
-// TagsFromGNMIPath returns a string representation of the gNMI path without keys,
-// as well as a map of the keys in the path.
-// the key map will also contain a target value if present in the gNMI path.
+// TagsFromGNMIPath //
 func TagsFromGNMIPath(p *gnmi.Path) (string, map[string]string) {
 	if p == nil {
 		return "", nil
@@ -167,25 +164,23 @@ func TagsFromGNMIPath(p *gnmi.Path) (string, map[string]string) {
 	sb := strings.Builder{}
 	if p.Origin != "" {
 		sb.WriteString(p.Origin)
-		sb.WriteString(":")
+		sb.Write([]byte(":"))
 	}
 	for _, e := range p.Elem {
 		if e.Name != "" {
-			sb.WriteString("/")
+			sb.Write([]byte("/"))
 			sb.WriteString(e.Name)
 		}
 		if e.Key != nil {
 			for k, v := range e.Key {
-				if e.Name == "" {
+				if e.Name != "" {
+					elems := strings.Split(e.Name, ":")
+					if len(elems) > 0 {
+						tags[elems[len(elems)-1]+"_"+k] = v
+					}
+				} else {
 					tags[k] = v
-					continue
 				}
-				elems := strings.Split(e.Name, ":")
-				ksb := strings.Builder{}
-				ksb.WriteString(elems[len(elems)-1])
-				ksb.WriteString("_")
-				ksb.WriteString(k)
-				tags[ksb.String()] = v
 			}
 		}
 	}
@@ -209,10 +204,8 @@ func getValueFlat(prefix string, updValue *gnmi.TypedValue) (map[string]interfac
 	case *gnmi.TypedValue_BytesVal:
 		values[prefix] = updValue.GetBytesVal()
 	case *gnmi.TypedValue_DecimalVal:
-		//lint:ignore SA1019 still need DecimalVal for backward compatibility
 		values[prefix] = updValue.GetDecimalVal()
 	case *gnmi.TypedValue_FloatVal:
-		//lint:ignore SA1019 still need GetFloatVal for backward compatibility
 		values[prefix] = updValue.GetFloatVal()
 	case *gnmi.TypedValue_IntVal:
 		values[prefix] = updValue.GetIntVal()

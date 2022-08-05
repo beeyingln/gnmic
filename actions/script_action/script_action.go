@@ -2,7 +2,6 @@ package script_action
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"log"
@@ -57,7 +56,7 @@ func (s *scriptAction) Init(cfg map[string]interface{}, opts ...actions.Option) 
 	return nil
 }
 
-func (s *scriptAction) Run(_ context.Context, aCtx *actions.Context) (interface{}, error) {
+func (s *scriptAction) Run(aCtx *actions.Context) (interface{}, error) {
 	if s.Command == "" && s.File == "" {
 		return nil, nil
 	}

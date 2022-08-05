@@ -24,11 +24,11 @@ func (a *App) InitOutput(ctx context.Context, name string, tcs map[string]*types
 						outputs.WithLogger(a.Logger),
 						outputs.WithEventProcessors(
 							a.Config.Processors,
-							a.Logger,
+							a.Logger, 
 							a.Config.Targets,
 							a.Config.Actions,
 						),
-						outputs.WithRegistry(a.reg),
+						outputs.WithRegister(a.reg),
 						outputs.WithName(a.Config.InstanceName),
 						outputs.WithClusterName(a.Config.ClusterName),
 						outputs.WithTargetsConfig(tcs),

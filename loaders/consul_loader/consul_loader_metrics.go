@@ -35,8 +35,5 @@ func registerMetrics(reg *prometheus.Registry) error {
 	if err = reg.Register(consulLoaderLoadedTargets); err != nil {
 		return err
 	}
-	if err = reg.Register(consulLoaderDeletedTargets); err != nil {
-		return err
-	}
-	return reg.Register(consulLoaderWatchError)
+	return reg.Register(consulLoaderDeletedTargets)
 }

@@ -58,15 +58,8 @@ func (p *groupBy) Init(cfg interface{}, opts ...formatters.Option) error {
 
 func (p *groupBy) Apply(es ...*formatters.EventMsg) []*formatters.EventMsg {
 	result := make([]*formatters.EventMsg, 0, len(es))
-	if p.Debug {
-		p.logger.Printf("before: %+v", es)
-	}
 	if !p.ByName {
-		result = p.byTags(es)
-		if p.Debug {
-			p.logger.Printf("after: %+v", result)
-		}
-		return result
+		p.byTags(es)
 	}
 	groups := make(map[string][]*formatters.EventMsg)
 	names := make([]string, 0)
@@ -80,9 +73,6 @@ func (p *groupBy) Apply(es ...*formatters.EventMsg) []*formatters.EventMsg {
 	sort.Strings(names)
 	for _, n := range names {
 		result = append(result, p.byTags(groups[n])...)
-	}
-	if p.Debug {
-		p.logger.Printf("after: %+v", result)
 	}
 	return result
 }

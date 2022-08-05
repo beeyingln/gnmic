@@ -15,6 +15,7 @@ import (
 	"github.com/manifoldco/promptui"
 	"github.com/openconfig/gnmi/proto/gnmi"
 	"github.com/openconfig/grpctunnel/tunnel"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -41,30 +42,8 @@ func (a *App) SubscribeRunE(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed reading subscriptions config: %v", err)
 	}
-
-	err = a.readConfigs()
-	if err != nil {
-		return err
-	}
-	err = a.Config.GetClustering()
-	if err != nil {
-		return err
-	}
-	err = a.Config.GetGNMIServer()
-	if err != nil {
-		return err
-	}
-	err = a.Config.GetAPIServer()
-	if err != nil {
-		return err
-	}
-	err = a.Config.GetLoader()
-	if err != nil {
-		return err
-	}
-	numInputs := len(a.Config.Inputs)
-	if len(subCfg) == 0 && numInputs == 0 {
-		return errors.New("no subscriptions or inputs configuration found")
+	if len(subCfg) == 0 {
+		return errors.New("no subscriptions configuration found")
 	}
 	// only once mode subscriptions requested
 	if allSubscriptionsModeOnce(subCfg) {
@@ -88,14 +67,35 @@ func (a *App) SubscribeRunE(cmd *cobra.Command, args []string) error {
 	if errors.Is(err, config.ErrNoTargetsFound) {
 		if !a.Config.LocalFlags.SubscribeWatchConfig &&
 			len(a.Config.FileConfig.GetStringMap("loader")) == 0 &&
-			!a.Config.UseTunnelServer &&
-			numInputs == 0 {
+			!a.Config.UseTunnelServer {
 			return fmt.Errorf("failed reading targets config: %v", err)
 		}
 	} else if err != nil {
 		return fmt.Errorf("failed reading targets config: %v", err)
 	}
-
+	err = a.readConfigs()
+	if err != nil {
+		return err
+	}
+	if a.Config.APIServer != nil && a.Config.APIServer.EnableMetrics {
+		a.reg = prometheus.NewRegistry()
+	}
+	err = a.Config.GetClustering()
+	if err != nil {
+		return err
+	}
+	err = a.Config.GetGNMIServer()
+	if err != nil {
+		return err
+	}
+	err = a.Config.GetAPIServer()
+	if err != nil {
+		return err
+	}
+	err = a.Config.GetLoader()
+	if err != nil {
+		return err
+	}
 	//
 	for {
 		err := a.InitLocker()
@@ -165,9 +165,6 @@ func (a *App) InitSubscribeFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolVarP(&a.Config.LocalFlags.SubscribeWatchConfig, "watch-config", "", false, "watch configuration changes, add or delete subscribe targets accordingly")
 	cmd.Flags().DurationVarP(&a.Config.LocalFlags.SubscribeBackoff, "backoff", "", 0, "backoff time between subscribe requests")
 	cmd.Flags().DurationVarP(&a.Config.LocalFlags.SubscribeLockRetry, "lock-retry", "", 5*time.Second, "time to wait between target lock attempts")
-	cmd.Flags().StringVarP(&a.Config.LocalFlags.SubscribeHistorySnapshot, "history-snapshot", "", "", "sets the snapshot time in a historical subscription, nanoseconds since Unix epoch or RFC3339 format")
-	cmd.Flags().StringVarP(&a.Config.LocalFlags.SubscribeHistoryStart, "history-start", "", "", "sets the start time in a historical range subscription, nanoseconds since Unix epoch or RFC3339 format")
-	cmd.Flags().StringVarP(&a.Config.LocalFlags.SubscribeHistoryEnd, "history-end", "", "", "sets the end time in a historical range subscription, nanoseconds since Unix epoch or RFC3339 format")
 	//
 	cmd.LocalFlags().VisitAll(func(flag *pflag.Flag) {
 		a.Config.FileConfig.BindPFlag(fmt.Sprintf("%s-%s", cmd.Name(), flag.Name), flag)
@@ -301,9 +298,6 @@ func (a *App) startIO() {
 }
 
 func allSubscriptionsModeOnce(sc map[string]*types.SubscriptionConfig) bool {
-	if len(sc) == 0 {
-		return false
-	}
 	for _, sub := range sc {
 		if strings.ToUpper(sub.Mode) != "ONCE" {
 			return false
@@ -313,9 +307,6 @@ func allSubscriptionsModeOnce(sc map[string]*types.SubscriptionConfig) bool {
 }
 
 func allSubscriptionsModePoll(sc map[string]*types.SubscriptionConfig) bool {
-	if len(sc) == 0 {
-		return false
-	}
 	for _, sub := range sc {
 		if strings.ToUpper(sub.Mode) != "POLL" {
 			return false

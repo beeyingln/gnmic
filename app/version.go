@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -79,15 +78,9 @@ func (a *App) VersionUpgradeRun(cmd *cobra.Command, args []string) error {
 
 // downloadFile will download a file from a URL and write its content to a file
 func downloadFile(url string, file *os.File) error {
-	client := http.Client{Timeout: 30 * time.Second}
+	client := http.Client{Timeout: 10 * time.Second}
 	// Get the data
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return err
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	resp, err := client.Do(req.WithContext(ctx))
+	resp, err := client.Get(url)
 	if err != nil {
 		return err
 	}

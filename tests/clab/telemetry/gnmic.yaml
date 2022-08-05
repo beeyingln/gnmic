@@ -7,7 +7,6 @@ log: true
 loader:
   type: docker
   debug: true
-  enable-metrics: true
   filters:
     - containers:
       - label=clab-node-kind: srl
@@ -27,7 +26,6 @@ loader:
   on-add:
     - interfaces
     - enable_interfaces
-    
 subscriptions:
   # Add subscriptions configuration here
   # e.g:

@@ -32,17 +32,6 @@ const (
 	defaultFormat   = "json"
 )
 
-const (
-	rpcGet        = "get"
-	rpcSet        = "set"
-	rpcSetUpdate  = "set-update"
-	rpcSetReplace = "set-replace"
-	rpcSetDelete  = "set-delete"
-	rpcDelete     = "delete"
-	rpcSub        = "sub"
-	rpcSubscribe  = "subscribe"
-)
-
 func init() {
 	actions.Register(actionType, func() actions.Action {
 		return &gnmiAction{
@@ -115,7 +104,7 @@ func (g *gnmiAction) Init(cfg map[string]interface{}, opts ...actions.Option) er
 	return nil
 }
 
-func (g *gnmiAction) Run(ctx context.Context, aCtx *actions.Context) (interface{}, error) {
+func (g *gnmiAction) Run(aCtx *actions.Context) (interface{}, error) {
 	g.m.Lock()
 	for n, tc := range aCtx.Targets {
 		g.targetsConfigs[n] = tc
@@ -137,7 +126,7 @@ func (g *gnmiAction) Run(ctx context.Context, aCtx *actions.Context) (interface{
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	result := make(map[string]interface{})
 	resCh := make(chan *gnmiResponse)
@@ -207,15 +196,11 @@ func (g *gnmiAction) setDefaults() {
 	if g.Encoding == "" {
 		g.Encoding = defaultEncoding
 	}
-	switch g.RPC {
-	case "":
+	if g.RPC == "" {
 		g.RPC = defaultRPC
-	case rpcSet:
-		g.RPC = rpcSetUpdate
-	case rpcDelete:
-		g.RPC = rpcSetDelete
-	case rpcSub:
-		g.RPC = rpcSubscribe
+	}
+	if g.RPC == "set" {
+		g.RPC = "set-update"
 	}
 	if g.Target == "" {
 		g.Target = defaultTarget
@@ -231,8 +216,8 @@ func (g *gnmiAction) validate() error {
 		return errors.New("paths field is required")
 	}
 	switch g.RPC {
-	case rpcGet, rpcSetDelete, rpcDelete:
-	case rpcSetUpdate, rpcSetReplace:
+	case "get", "delete":
+	case "set-update", "set-replace":
 		numValues := len(g.values)
 		if numValues == 0 {
 			return errors.New("values field is required when RPC is set")
@@ -240,7 +225,7 @@ func (g *gnmiAction) validate() error {
 		if numPaths != len(g.values) {
 			return errors.New("number of paths and values do not match")
 		}
-	case rpcSub, rpcSubscribe:
+	case "sub", "subscribe":
 		if strings.ToLower(g.Format) != "json" &&
 			strings.ToLower(g.Format) != "protojson" &&
 			strings.ToLower(g.Format) != "event" {
@@ -328,9 +313,9 @@ func (g *gnmiAction) createSetRequest(in *actions.Context) (*gnmi.SetRequest, er
 		}
 		sPath := b.String()
 		switch g.RPC {
-		case rpcSetDelete:
+		case "set-delete":
 			gnmiOpts = append(gnmiOpts, api.Delete(sPath))
-		case rpcSetUpdate:
+		case "set-update":
 			b.Reset()
 			err = g.values[i].Execute(b, in)
 			if err != nil {
@@ -340,7 +325,7 @@ func (g *gnmiAction) createSetRequest(in *actions.Context) (*gnmi.SetRequest, er
 				api.Path(sPath),
 				api.Value(b.String(), g.Encoding),
 			))
-		case rpcSetReplace:
+		case "set-replace":
 			b.Reset()
 			err = g.values[i].Execute(b, in)
 			if err != nil {
@@ -411,11 +396,11 @@ func (g *gnmiAction) selectTargets(tName string) ([]*types.TargetConfig, error) 
 
 func (g *gnmiAction) runRPC(ctx context.Context, tc *types.TargetConfig, in *actions.Context) ([]byte, error) {
 	switch g.RPC {
-	case rpcGet:
+	case "get":
 		return g.runGet(ctx, tc, in)
-	case rpcSetUpdate, rpcSetReplace, rpcSetDelete:
+	case "set-update", "set-replace", "delete":
 		return g.runSet(ctx, tc, in)
-	case rpcSubscribe: // once
+	case "sub", "subscribe": // once
 		return g.runSubscribe(ctx, tc, in)
 	default:
 		return nil, fmt.Errorf("unknown RPC %q", g.RPC)

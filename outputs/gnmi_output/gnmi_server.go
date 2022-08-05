@@ -97,7 +97,7 @@ func (s *server) Update(n *ctree.Leaf) {
 }
 
 func addSubscription(m *match.Match, s *gnmi.SubscriptionList, c *matchClient) func() {
-	removes := make([]func(), 0, len(s.GetSubscription()))
+	var removes []func()
 	prefix := path.ToStrings(s.GetPrefix(), true)
 	for _, p := range s.GetSubscription() {
 		if p.GetPath() == nil {

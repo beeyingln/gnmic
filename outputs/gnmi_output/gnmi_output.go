@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	loggingPrefix           = "[gnmi_output:%s] "
+	loggingPrefix           = "[gnmi_output] "
 	defaultMaxSubscriptions = 64
 	defaultMaxGetRPC        = 64
 	defaultAddress          = ":57400"
@@ -84,7 +84,6 @@ func (g *gNMIOutput) Init(ctx context.Context, name string, cfg map[string]inter
 	if err != nil {
 		return err
 	}
-	g.logger.SetPrefix(fmt.Sprintf(loggingPrefix, name))
 	if g.targetTpl == nil {
 		g.targetTpl, err = utils.CreateTemplate(fmt.Sprintf("%s-target-template", name), g.cfg.TargetTemplate)
 		if err != nil {
