@@ -31,12 +31,6 @@ func (a *App) newAPIServer() (*http.Server, error) {
 		a.router.Handle("/metrics", promhttp.HandlerFor(a.reg, promhttp.HandlerOpts{}))
 		a.reg.MustRegister(collectors.NewGoCollector())
 		a.reg.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
-<<<<<<< HEAD
-
-		//Register gNMIC Server Metrics
-		registerGnmiServerMetrics(a.reg)
-=======
->>>>>>> 538459ecabb87d065482f05f94d236c97d0a2d0b
 	}
 	s := &http.Server{
 		Addr:         a.Config.APIServer.Address,

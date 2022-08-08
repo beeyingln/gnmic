@@ -7,28 +7,16 @@ import (
 	"fmt"
 	"io"
 	"net"
-<<<<<<< HEAD
-	"sort"
-=======
->>>>>>> 538459ecabb87d065482f05f94d236c97d0a2d0b
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-<<<<<<< HEAD
-	"github.com/google/uuid"
-=======
->>>>>>> 538459ecabb87d065482f05f94d236c97d0a2d0b
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/hashicorp/consul/api"
 	"github.com/karimra/gnmic/target"
 	"github.com/karimra/gnmic/types"
 	"github.com/karimra/gnmic/utils"
-<<<<<<< HEAD
-	"github.com/openconfig/gnmi/cache"
-=======
->>>>>>> 538459ecabb87d065482f05f94d236c97d0a2d0b
 	"github.com/openconfig/gnmi/coalesce"
 	"github.com/openconfig/gnmi/ctree"
 	"github.com/openconfig/gnmi/match"
@@ -110,14 +98,6 @@ func (a *App) startGnmiServer() {
 		break
 	}
 
-<<<<<<< HEAD
-	// Queue management
-	a.queueMutex = &sync.RWMutex{}
-	a.queueRequest = make(map[string]*QueuedRequest)
-	a.queueResponse = make(map[string]*QueuedResponse)
-
-=======
->>>>>>> 538459ecabb87d065482f05f94d236c97d0a2d0b
 	a.grpcSrv = grpc.NewServer(opts...)
 	gnmi.RegisterGNMIServer(a.grpcSrv, a)
 	//
@@ -130,273 +110,6 @@ func (a *App) startGnmiServer() {
 		cancel()
 	}()
 	go a.registerGNMIServer(ctx)
-<<<<<<< HEAD
-	go a.processQueue(ctx)
-}
-
-func (a *App) processQueue(ctx context.Context) {
-	for {
-		time.Sleep(a.Config.GnmiServer.BatchingInterval)
-		a.sendBatch(ctx)
-	}
-}
-
-type OperationType int
-
-const (
-	Delete OperationType = iota
-	Replace
-	Update
-)
-
-type BatchEntry struct {
-	path      string
-	obj       interface{}
-	operation OperationType
-	uuid      string
-}
-type BatchEntryList []*BatchEntry
-
-func (b BatchEntryList) Len() int {
-	return len(b)
-}
-
-func (b BatchEntryList) Less(i, j int) bool {
-	return strings.Compare(b[i].path, b[j].path) < 0
-}
-
-func (b BatchEntryList) Swap(i, j int) {
-	b[i], b[j] = b[j], b[i]
-}
-
-func pathSort(req *gnmi.SetRequest, refDelete map[string][]string, refReplace map[string][]string, refUpdate map[string][]string, target string) {
-	// Create traceability links between the actual entry and the references pointing to it by index
-	var toSort BatchEntryList
-	for i, e := range req.Delete {
-		toSort = append(toSort, &BatchEntry{e.String(), e, Delete, refDelete[target][i]})
-	}
-	for i, e := range req.Replace {
-		toSort = append(toSort, &BatchEntry{e.Path.String(), e, Replace, refReplace[target][i]})
-	}
-	for i, e := range req.Update {
-		toSort = append(toSort, &BatchEntry{e.Path.String(), e, Update, refUpdate[target][i]})
-	}
-
-	// Now sort the list of batchentries
-	sort.Sort(toSort)
-
-	// And now reconstruct the original content...
-	refDelete[target] = []string{}
-	refReplace[target] = []string{}
-	refUpdate[target] = []string{}
-	req.Delete = []*gnmi.Path{}
-	req.Replace = []*gnmi.Update{}
-	req.Update = []*gnmi.Update{}
-
-	for _, e := range toSort {
-		switch e.operation {
-		case Delete:
-			req.Delete = append(req.Delete, e.obj.(*gnmi.Path))
-			refDelete[target] = append(refDelete[target], e.uuid)
-		case Replace:
-			req.Replace = append(req.Replace, e.obj.(*gnmi.Update))
-			refReplace[target] = append(refReplace[target], e.uuid)
-		case Update:
-			req.Update = append(req.Update, e.obj.(*gnmi.Update))
-			refUpdate[target] = append(refUpdate[target], e.uuid)
-		}
-	}
-}
-
-func (a *App) sendBatch(ctx context.Context) {
-	a.queueMutex.Lock()
-	defer a.queueMutex.Unlock()
-
-	// An overview of all variables that we introduce, together with an example of its content
-	// targetResponseUuid*: list of all requested UUIDs in the order they arrived grouped per target; used later on for expanding the response in success case.
-	//    example: {<target1>: [<uuid1>, <uuid2>, ...], <target2>: [<uuid3>]}
-	// targetMergedRequests: map of the received requests, merged per target
-	//    example: {<target1>: [<req1>, <req2>]}
-	// targetConfigs: configuration of all gNMI targets
-	//    example: {<target1>: <target1_config>}
-	// targetUuids: maps a target to all the UUIDs that belong to it
-	//    example: {<target1>: [<uuid1>, <uuid2>]
-	// targetErrChans: maps a target to all its error channels used to communicate back errors
-	//    example: {<target1>: [<chan1>, <chan2>], ...}
-
-	// Below variables are already specific to a target, so no mapping based on target is necessary
-	// uuidOrder: the order in which all UUIDs for a specific target will be processed, according to the gNMI spec. Note that some UUID might appear multiple times, if it contains multiple parts.
-	//    example: [<uuid1 (for delete)>, <uuid2>, <uuid1 (for replace)>]
-	// uuidMap: maps each UUID to the index in the uuidOrder variable. This can be used to find all responses linked to a specific UUID
-	//    example: {<uuid1>: [0, 2], <uuid2>: [1]}
-
-	// Initialize all values
-	targetResponseUuidUpdate := make(map[string][]string, 0)
-	targetResponseUuidReplace := make(map[string][]string, 0)
-	targetResponseUuidDelete := make(map[string][]string, 0)
-	targetMergedRequests := make(map[string]*gnmi.SetRequest)
-	targetConfigs := make(map[string]*target.Target)
-	targetUuids := make(map[string][]string)
-	targetErrChans := make(map[string][]chan error)
-
-	// Merge together based on target
-	// Merge into a single SetRequest
-	a.Logger.Printf("batching %d requests", len(a.queueRequest))
-	for reqUuid, queueReq := range a.queueRequest {
-		if _, ok := targetMergedRequests[queueReq.targetName]; !ok {
-			// First request; so don't merge, just copy
-			targetMergedRequests[queueReq.targetName] = proto.Clone(queueReq.req).(*gnmi.SetRequest)
-		} else {
-			// Merge in the new update, replace, and delete statements
-			v := targetMergedRequests[queueReq.targetName]
-			v.Update = append(v.Update, queueReq.req.Update...)
-			v.Replace = append(v.Replace, queueReq.req.Replace...)
-			v.Delete = append(v.Delete, queueReq.req.Delete...)
-		}
-
-		prev, found := targetErrChans[queueReq.targetName]
-		if found {
-			targetErrChans[queueReq.targetName] = append(prev, queueReq.errChan)
-		} else {
-			targetErrChans[queueReq.targetName] = []chan error{queueReq.errChan}
-		}
-
-		process := func(tr map[string][]string, target string, count int, reqUuid string) {
-			for i := 0; i < count; i++ {
-				prev, found := tr[target]
-				if found {
-					tr[target] = append(prev, reqUuid)
-				} else {
-					tr[target] = []string{reqUuid}
-				}
-			}
-		}
-
-		// Keep track of UUIDs for each entry
-		// Note that a single request can contain multiple update, replace, and delete parts
-		process(targetResponseUuidDelete, queueReq.targetName, len(queueReq.req.Delete), reqUuid)
-		process(targetResponseUuidReplace, queueReq.targetName, len(queueReq.req.Replace), reqUuid)
-		process(targetResponseUuidUpdate, queueReq.targetName, len(queueReq.req.Update), reqUuid)
-
-		if _, ok := targetUuids[queueReq.targetName]; !ok {
-			targetUuids[queueReq.targetName] = make([]string, 0)
-		}
-		targetUuids[queueReq.targetName] = append(targetUuids[queueReq.targetName], reqUuid)
-
-		// And store that target config as well if it doesn't exist yet, based on the name
-		if _, ok := targetConfigs[queueReq.targetName]; !ok {
-			targetConfigs[queueReq.targetName] = queueReq.target
-		}
-	}
-
-	// Make all requests
-	// NOTE in the case of the gNMI proxy for ENC NwI, there will only be a single target
-	for name, t := range targetConfigs {
-		// Actual request; this is a copy from the original code in the Set function
-		err := t.CreateGNMIClient(ctx)
-		if err != nil {
-			a.Logger.Printf("target %q err: %v", name, err)
-
-			for _, errChan := range targetErrChans[name] {
-				// Signal failure in errChan
-				errChan <- fmt.Errorf("target %q err: %v", name, err)
-			}
-
-			for _, reqUuid := range targetUuids[name] {
-				// Mark all of them as finished with 'nil' respone, indicating errChan failure
-				a.queueResponse[reqUuid] = nil
-				delete(a.queueRequest, reqUuid)
-			}
-
-			// Continue on to the next one
-			continue
-		}
-		defer t.Close()
-
-		req, _ := targetMergedRequests[name]
-		creq := proto.Clone(req).(*gnmi.SetRequest)
-		pathSort(creq, targetResponseUuidDelete, targetResponseUuidReplace, targetResponseUuidUpdate, name)
-		if creq.GetPrefix() == nil {
-			creq.Prefix = new(gnmi.Path)
-		}
-		if creq.GetPrefix().GetTarget() == "" || creq.GetPrefix().GetTarget() == "*" {
-			creq.Prefix.Target = name
-		}
-
-		res, err := t.Set(ctx, creq)
-		incrementGnmiOutgoingSetRequestsTotalMetric()
-
-		if err != nil {
-			// Something went wrong. Due to lack of a SetResponse and UpdateResults, we can only try to fall back to trying a sequential approach
-			incrementGnmiIncomingSetRequestsBatchingTransactionFailureImpactedTotalMetric(float64(len(targetUuids[name])))
-			a.Logger.Printf("failed batching requests for %s", string(name))
-			for i, reqUuid := range targetUuids[name] {
-				if i == 0 {
-					// Wait for a new "batching interval", as we don't want to overload the device
-					time.Sleep(a.Config.GnmiServer.BatchingInterval)
-					// Process the first request as normal
-					req = a.queueRequest[reqUuid].req
-					creq := proto.Clone(req).(*gnmi.SetRequest)
-					if creq.GetPrefix() == nil {
-						creq.Prefix = new(gnmi.Path)
-					}
-					if creq.GetPrefix().GetTarget() == "" || creq.GetPrefix().GetTarget() == "*" {
-						creq.Prefix.Target = name
-					}
-					res, err := t.Set(ctx, creq)
-					incrementGnmiOutgoingSetRequestsTotalMetric()
-					a.queueResponse[reqUuid] = &QueuedResponse{res, err}
-					delete(a.queueRequest, reqUuid)
-				} else {
-					// But fail all other requests to cause backoff
-					a.queueResponse[reqUuid] = &QueuedResponse{nil, errors.New("Another request in the same write batch failed, causing this one to fail as well. Other request failure message: " + err.Error())}
-					delete(a.queueRequest, reqUuid)
-				}
-			}
-
-		} else {
-			// Split up again
-			// NOTE if there are some failed requests, all of them will have failed. This is not ideal, but it is how gNMI works...
-			// Map UUIDs to the updateresult
-			// Order according to gNMI spec: delete, replace, update
-			// As such, the updateResult should be in that order
-			uuidOrder := make([]string, 0, len(targetResponseUuidDelete[name])+len(targetResponseUuidReplace[name])+len(targetResponseUuidUpdate[name]))
-			uuidOrder = append(uuidOrder, targetResponseUuidDelete[name]...)
-			uuidOrder = append(uuidOrder, targetResponseUuidReplace[name]...)
-			uuidOrder = append(uuidOrder, targetResponseUuidUpdate[name]...)
-			a.Logger.Printf("successfully batched all requests for %s", string(name))
-			// uuidOrder now contains the Uuids in the correct order
-			// Now translate this to a mapping from uuid to index
-			uuidMap := map[string][]int{}
-			for index, reqUuid := range uuidOrder {
-				prevList, found := uuidMap[reqUuid]
-				if found {
-					uuidMap[reqUuid] = append(prevList, index)
-				} else {
-					uuidMap[reqUuid] = []int{index}
-				}
-			}
-			// uuidMap now contains a mapping from uuid to the index in the updateResult
-			for _, reqUuid := range targetUuids[name] {
-				specificResponse := proto.Clone(res).(*gnmi.SetResponse)
-				// specificResponse should strip the `UpdateResult` only, by taking out the one that we need for this
-				// This we can know based on the previously defined uuidMap
-				specificResponse.Response = fetchIndices(specificResponse.Response, uuidMap[reqUuid])
-				a.queueResponse[reqUuid] = &QueuedResponse{specificResponse, err}
-				delete(a.queueRequest, reqUuid)
-			}
-		}
-	}
-}
-
-func fetchIndices(base []*gnmi.UpdateResult, indices []int) []*gnmi.UpdateResult {
-	result := make([]*gnmi.UpdateResult, 0, len(indices))
-	for _, index := range indices {
-		result = append(result, base[index])
-	}
-	return result
-=======
->>>>>>> 538459ecabb87d065482f05f94d236c97d0a2d0b
 }
 
 func (a *App) registerGNMIServer(ctx context.Context) {
@@ -640,55 +353,6 @@ func (a *App) Get(ctx context.Context, req *gnmi.GetRequest) (*gnmi.GetResponse,
 			if creq.GetPrefix().GetTarget() == "" || creq.GetPrefix().GetTarget() == "*" {
 				creq.Prefix.Target = name
 			}
-<<<<<<< HEAD
-
-			allFound := false
-			if a.Config.GnmiServer.ReadCache {
-				//Retrieve Notifications which are in Cache
-				var notifPathsNotInCache []*gnmi.Path = make([]*gnmi.Path, 0)
-				for _, getPath := range req.GetPath() {
-					var notification *gnmi.Notification
-					notification, err = a.getNotificationFromCache(a.c, name, req.GetPrefix(), getPath)
-					if err != nil {
-						a.Logger.Printf("target %q err: %v", name, err)
-
-						notifPathsNotInCache = append(notifPathsNotInCache, getPath)
-					} else {
-						if notification != nil {
-							results <- notification
-						} else {
-							notifPathsNotInCache = append(notifPathsNotInCache, getPath)
-						}
-					}
-				}
-
-				// Notications which are not in Cache are retrived via gNMI Get request
-				creq.Path = notifPathsNotInCache
-				if len(creq.Path) == 0 {
-					incrementGnmiIncomingGetRequestsCacheHitTotalMetric()
-					allFound = true
-				}
-			}
-
-			if !a.Config.GnmiServer.ReadCache || !allFound {
-				// If not found or if we don't use the cache, make the request anyhow
-				res, err := t.Get(ctx, creq)
-				if err != nil {
-					a.Logger.Printf("target %q err: %v", name, err)
-					errChan <- fmt.Errorf("target %q err: %v", name, err)
-					return
-				}
-
-				for _, n := range res.GetNotification() {
-					if n.GetPrefix() == nil {
-						n.Prefix = new(gnmi.Path)
-					}
-					if n.GetPrefix().GetTarget() == "" {
-						n.Prefix.Target = name
-					}
-					results <- n
-				}
-=======
 			res, err := t.Get(ctx, creq)
 			if err != nil {
 				a.Logger.Printf("target %q err: %v", name, err)
@@ -704,7 +368,6 @@ func (a *App) Get(ctx context.Context, req *gnmi.GetRequest) (*gnmi.GetResponse,
 					n.Prefix.Target = name
 				}
 				results <- n
->>>>>>> 538459ecabb87d065482f05f94d236c97d0a2d0b
 			}
 		}(name, tc)
 	}
@@ -722,10 +385,6 @@ func (a *App) Get(ctx context.Context, req *gnmi.GetRequest) (*gnmi.GetResponse,
 }
 
 func (a *App) Set(ctx context.Context, req *gnmi.SetRequest) (*gnmi.SetResponse, error) {
-<<<<<<< HEAD
-	incrementGnmiIncomingSetRequestsTotalMetric(1)
-=======
->>>>>>> 538459ecabb87d065482f05f94d236c97d0a2d0b
 	ok := a.unaryRPCsem.TryAcquire(1)
 	if !ok {
 		return nil, status.Errorf(codes.ResourceExhausted, "max number of Unary RPC reached")
@@ -793,62 +452,6 @@ func (a *App) Set(ctx context.Context, req *gnmi.SetRequest) (*gnmi.SetResponse,
 				)
 				t.Config.Address = t.Config.Name
 			}
-<<<<<<< HEAD
-			var res *gnmi.SetResponse
-			var err error
-			if a.Config.GnmiServer.WriteBatching {
-				a.Logger.Printf("registering request in the write batch due to configuration")
-				reqUuid := uuid.New().String()
-				a.queueMutex.Lock()
-				a.queueRequest[reqUuid] = &QueuedRequest{req, t, name, errChan}
-				a.queueMutex.Unlock()
-
-				// Wait for the entry to be processed; polling again every so often
-				for {
-					// Wait for some time
-					time.Sleep(1 * time.Second)
-					a.queueMutex.RLock()
-					_, ok := a.queueResponse[reqUuid]
-					a.queueMutex.RUnlock()
-					if ok {
-						// Element reqUuid exists, so we can finish waiting!
-						break
-					}
-				}
-
-				// Is present now; pop from results
-				a.queueMutex.Lock()
-				response, _ := a.queueResponse[reqUuid]
-				delete(a.queueResponse, reqUuid)
-				a.queueMutex.Unlock()
-				if response != nil {
-					res = response.res
-					err = response.err
-				} else {
-					// Error in errChan, so processed elsewhere
-					return
-				}
-			} else {
-				a.Logger.Printf("skipping write batching due to configuration")
-				err := t.CreateGNMIClient(ctx, targetDialOpts...)
-				if err != nil {
-					a.Logger.Printf("target %q err: %v", name, err)
-					errChan <- fmt.Errorf("target %q err: %v", name, err)
-					return
-				}
-				defer t.Close()
-				creq := proto.Clone(req).(*gnmi.SetRequest)
-				if creq.GetPrefix() == nil {
-					creq.Prefix = new(gnmi.Path)
-				}
-				if creq.GetPrefix().GetTarget() == "" || creq.GetPrefix().GetTarget() == "*" {
-					creq.Prefix.Target = name
-				}
-				res, err = t.Set(ctx, creq)
-				incrementGnmiOutgoingSetRequestsTotalMetric()
-			}
-
-=======
 			err := t.CreateGNMIClient(ctx, targetDialOpts...)
 			if err != nil {
 				a.Logger.Printf("target %q err: %v", name, err)
@@ -863,7 +466,6 @@ func (a *App) Set(ctx context.Context, req *gnmi.SetRequest) (*gnmi.SetResponse,
 				creq.Prefix.Target = name
 			}
 			res, err := t.Set(ctx, creq)
->>>>>>> 538459ecabb87d065482f05f94d236c97d0a2d0b
 			if err != nil {
 				a.Logger.Printf("target %q err: %v", name, err)
 				errChan <- fmt.Errorf("target %q err: %v", name, err)
@@ -1656,48 +1258,3 @@ func subscriptionConfigToNotification(sub *types.SubscriptionConfig, e gnmi.Enco
 	}
 	return nil
 }
-<<<<<<< HEAD
-
-func (a *App) getNotificationFromCache(cache *cache.Cache, targetName string, prefix *gnmi.Path, path *gnmi.Path) (*gnmi.Notification, error) {
-	var notification *gnmi.Notification
-	var err error
-
-	if cache.HasTarget(targetName) {
-		var isInCache bool = false
-		var nb *NotificationBuilder
-		nb, err = NewNotificationBuilder(targetName, a.Config.GlobalFlags.Encoding, prefix, path)
-		if err != nil {
-			return nil, err
-		}
-
-		err = cache.Query(targetName, nb.GetCompletePath(),
-			func(_ []string, l *ctree.Leaf, v interface{}) error {
-				if err != nil {
-					return err
-				}
-
-				switch notif := v.(type) {
-				case *gnmi.Notification:
-					isInCache = true
-					if err = nb.AppendNotification(proto.Clone(notif).(*gnmi.Notification)); err != nil {
-						return err
-					}
-				}
-
-				return nil
-			})
-		if err != nil {
-			return nil, err
-		}
-
-		if isInCache {
-			if notification, err = nb.BuildNotification(); err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	return notification, err
-}
-=======
->>>>>>> 538459ecabb87d065482f05f94d236c97d0a2d0b

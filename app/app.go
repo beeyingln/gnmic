@@ -43,21 +43,6 @@ const (
 	defaultHTTPClientTimeout = 5 * time.Second
 )
 
-<<<<<<< HEAD
-type QueuedRequest struct {
-	req        *gnmi.SetRequest
-	target     *target.Target
-	targetName string
-	errChan    chan error
-}
-
-type QueuedResponse struct {
-	res *gnmi.SetResponse
-	err error
-}
-
-=======
->>>>>>> 538459ecabb87d065482f05f94d236c97d0a2d0b
 type App struct {
 	ctx     context.Context
 	Cfn     context.CancelFunc
@@ -107,13 +92,6 @@ type App struct {
 	match           *match.Match
 	subscribeRPCsem *semaphore.Weighted
 	unaryRPCsem     *semaphore.Weighted
-<<<<<<< HEAD
-	// gNMI batching
-	queueMutex    *sync.RWMutex
-	queueRequest  map[string]*QueuedRequest
-	queueResponse map[string]*QueuedResponse
-=======
->>>>>>> 538459ecabb87d065482f05f94d236c97d0a2d0b
 	// tunnel server
 	// gRPC server where the tunnel service will be registered
 	grpcTunnelSrv *grpc.Server
