@@ -7,19 +7,28 @@ import (
 	"fmt"
 	"io"
 	"net"
+<<<<<<< HEAD
 	"sort"
+=======
+>>>>>>> 538459ecabb87d065482f05f94d236c97d0a2d0b
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+<<<<<<< HEAD
 	"github.com/google/uuid"
+=======
+>>>>>>> 538459ecabb87d065482f05f94d236c97d0a2d0b
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/hashicorp/consul/api"
 	"github.com/karimra/gnmic/target"
 	"github.com/karimra/gnmic/types"
 	"github.com/karimra/gnmic/utils"
+<<<<<<< HEAD
 	"github.com/openconfig/gnmi/cache"
+=======
+>>>>>>> 538459ecabb87d065482f05f94d236c97d0a2d0b
 	"github.com/openconfig/gnmi/coalesce"
 	"github.com/openconfig/gnmi/ctree"
 	"github.com/openconfig/gnmi/match"
@@ -101,11 +110,14 @@ func (a *App) startGnmiServer() {
 		break
 	}
 
+<<<<<<< HEAD
 	// Queue management
 	a.queueMutex = &sync.RWMutex{}
 	a.queueRequest = make(map[string]*QueuedRequest)
 	a.queueResponse = make(map[string]*QueuedResponse)
 
+=======
+>>>>>>> 538459ecabb87d065482f05f94d236c97d0a2d0b
 	a.grpcSrv = grpc.NewServer(opts...)
 	gnmi.RegisterGNMIServer(a.grpcSrv, a)
 	//
@@ -118,6 +130,7 @@ func (a *App) startGnmiServer() {
 		cancel()
 	}()
 	go a.registerGNMIServer(ctx)
+<<<<<<< HEAD
 	go a.processQueue(ctx)
 }
 
@@ -382,6 +395,8 @@ func fetchIndices(base []*gnmi.UpdateResult, indices []int) []*gnmi.UpdateResult
 		result = append(result, base[index])
 	}
 	return result
+=======
+>>>>>>> 538459ecabb87d065482f05f94d236c97d0a2d0b
 }
 
 func (a *App) registerGNMIServer(ctx context.Context) {
@@ -625,6 +640,7 @@ func (a *App) Get(ctx context.Context, req *gnmi.GetRequest) (*gnmi.GetResponse,
 			if creq.GetPrefix().GetTarget() == "" || creq.GetPrefix().GetTarget() == "*" {
 				creq.Prefix.Target = name
 			}
+<<<<<<< HEAD
 
 			allFound := false
 			if a.Config.GnmiServer.ReadCache {
@@ -672,6 +688,23 @@ func (a *App) Get(ctx context.Context, req *gnmi.GetRequest) (*gnmi.GetResponse,
 					}
 					results <- n
 				}
+=======
+			res, err := t.Get(ctx, creq)
+			if err != nil {
+				a.Logger.Printf("target %q err: %v", name, err)
+				errChan <- fmt.Errorf("target %q err: %v", name, err)
+				return
+			}
+
+			for _, n := range res.GetNotification() {
+				if n.GetPrefix() == nil {
+					n.Prefix = new(gnmi.Path)
+				}
+				if n.GetPrefix().GetTarget() == "" {
+					n.Prefix.Target = name
+				}
+				results <- n
+>>>>>>> 538459ecabb87d065482f05f94d236c97d0a2d0b
 			}
 		}(name, tc)
 	}
@@ -689,7 +722,10 @@ func (a *App) Get(ctx context.Context, req *gnmi.GetRequest) (*gnmi.GetResponse,
 }
 
 func (a *App) Set(ctx context.Context, req *gnmi.SetRequest) (*gnmi.SetResponse, error) {
+<<<<<<< HEAD
 	incrementGnmiIncomingSetRequestsTotalMetric(1)
+=======
+>>>>>>> 538459ecabb87d065482f05f94d236c97d0a2d0b
 	ok := a.unaryRPCsem.TryAcquire(1)
 	if !ok {
 		return nil, status.Errorf(codes.ResourceExhausted, "max number of Unary RPC reached")
@@ -757,6 +793,7 @@ func (a *App) Set(ctx context.Context, req *gnmi.SetRequest) (*gnmi.SetResponse,
 				)
 				t.Config.Address = t.Config.Name
 			}
+<<<<<<< HEAD
 			var res *gnmi.SetResponse
 			var err error
 			if a.Config.GnmiServer.WriteBatching {
@@ -811,6 +848,22 @@ func (a *App) Set(ctx context.Context, req *gnmi.SetRequest) (*gnmi.SetResponse,
 				incrementGnmiOutgoingSetRequestsTotalMetric()
 			}
 
+=======
+			err := t.CreateGNMIClient(ctx, targetDialOpts...)
+			if err != nil {
+				a.Logger.Printf("target %q err: %v", name, err)
+				errChan <- fmt.Errorf("target %q err: %v", name, err)
+				return
+			}
+			creq := proto.Clone(req).(*gnmi.SetRequest)
+			if creq.GetPrefix() == nil {
+				creq.Prefix = new(gnmi.Path)
+			}
+			if creq.GetPrefix().GetTarget() == "" || creq.GetPrefix().GetTarget() == "*" {
+				creq.Prefix.Target = name
+			}
+			res, err := t.Set(ctx, creq)
+>>>>>>> 538459ecabb87d065482f05f94d236c97d0a2d0b
 			if err != nil {
 				a.Logger.Printf("target %q err: %v", name, err)
 				errChan <- fmt.Errorf("target %q err: %v", name, err)
@@ -1603,6 +1656,7 @@ func subscriptionConfigToNotification(sub *types.SubscriptionConfig, e gnmi.Enco
 	}
 	return nil
 }
+<<<<<<< HEAD
 
 func (a *App) getNotificationFromCache(cache *cache.Cache, targetName string, prefix *gnmi.Path, path *gnmi.Path) (*gnmi.Notification, error) {
 	var notification *gnmi.Notification
@@ -1645,3 +1699,5 @@ func (a *App) getNotificationFromCache(cache *cache.Cache, targetName string, pr
 
 	return notification, err
 }
+=======
+>>>>>>> 538459ecabb87d065482f05f94d236c97d0a2d0b

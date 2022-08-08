@@ -24,7 +24,11 @@ func (a *App) InitOutput(ctx context.Context, name string, tcs map[string]*types
 						outputs.WithLogger(a.Logger),
 						outputs.WithEventProcessors(
 							a.Config.Processors,
+<<<<<<< HEAD
 							a.Logger,
+=======
+							a.Logger, 
+>>>>>>> 538459ecabb87d065482f05f94d236c97d0a2d0b
 							a.Config.Targets,
 							a.Config.Actions,
 						),
